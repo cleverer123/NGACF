@@ -13,7 +13,7 @@ import numpy as np
 from numpy import diag
 from tensorboardX import SummaryWriter
 
-from graphattention.GACFmodel import GACF
+from graphattention.GACFmodel import GACF, GCF
 from graphattention.GACFmodel import SVD
 from graphattention.GACFmodel import NCF
 from graphattention.dataPreprosessing import ML1K
@@ -53,9 +53,10 @@ rt['itemId'] = rt['itemId'] - 1
 # L = np.dot(np.dot(D_,mat),D_)
 #
 para = {
-    'epoch':30,
-    'lr':0.01,
-    'weight_decay': 0.001,
+    'model':'GACF', 
+    'epoch':40,
+    'lr':0.001,
+    'weight_decay': 0.0001,
     'batch_size':2048,
     'train':0.7,
     'valid':0.15
@@ -69,7 +70,10 @@ train, valid, test = random_split(ds,[trainLen, validLen, len(ds)- validLen -tra
 train_loader = DataLoader(train, batch_size=para['batch_size'], shuffle=True,pin_memory=True)
 valid_loader = DataLoader(valid, batch_size=len(valid), shuffle=False,pin_memory=True)
 
-model = GACF(userNum, itemNum, rt, 128, layers=[128,128,128]).cuda()
+if para['model'] == 'GACF':
+    model = GACF(userNum, itemNum, rt, 128, layers=[128,128,128]).cuda()
+elif para['model'] == 'GCF':
+    model = GCF(userNum, itemNum, rt, 128, layers=[128,128,128]).cuda()
 # model = SVD(userNum,itemNum,50).cuda()
 # model = NCF(userNum,itemNum,64,layers=[128,64,32,16,8]).cuda()
 optim = Adam(model.parameters(), lr=para['lr'],weight_decay=para['weight_decay'])
@@ -98,8 +102,9 @@ def valid(model, valid_loader, lossfn):
 
 
 # Add summaryWriter. Results are in ./runs/. Run 'tensorboard --logdir=./runs' and see in browser.
-summaryWriter = SummaryWriter(comment='lr:{}wd:{}'.format(para['lr'], para['weight_decay']))
-
+summaryWriter = SummaryWriter(comment='_M:{}_lr:{}_wd:{}'.format(para['model'], para['lr'], para['weight_decay']))
+best_valid = 1
+best_model = None
 for epoch in range(para['epoch']):
     epoch_loss = 0.0
     start_time = time.time()
@@ -110,15 +115,16 @@ for epoch in range(para['epoch']):
     print("The time elapse of epoch {:03d}".format(epoch) + " is: " + time.strftime("%H: %M: %S", time.gmtime(time.time() - start_time)))
     print('epoch:{}, train_loss:{}, valid_loss:{}'.format(epoch, train_loss, valid_loss))
 
+    if best_valid > valid_loss:
+        best_valid, best_epoch, best_model = valid_loss, epoch, model
+        # RuntimeError: sparse tensors do not have storage
+        # torch.save(model, 'best_models/M{}_lr{}_wd{}.model'.format(para['model'], para['lr'], para['weight_decay']))
+
+print('best_model at epoch:{} with valid_loss:{}'.format(best_epoch, best_valid))
 
 test_loader = DataLoader(test,batch_size=len(test),)
-test_loss = valid(model, test_loader, lossfn)
+test_loss = valid(best_model, test_loader, lossfn)
 print('test_loss:', test_loss)
+summaryWriter.add_scalar('loss/test_loss', test_loss, epoch)
 
-
-# for data in testdl:
-#     prediction = model(data[0].cuda(),data[1].cuda())
-
-# loss = lossfn(data[2].float().cuda(),prediction)
-# print('testloss:', loss.item()) # MSEloss
 
