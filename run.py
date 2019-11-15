@@ -14,10 +14,12 @@ from numpy import diag
 from tensorboardX import SummaryWriter
 
 from graphattention.GACFmodel import GACF
+from graphattention.GACFmodel2 import GACFV2
 
 from graphattention.dataPreprosessing import ML1K
 
 from graphattention.GCFmodel import  GCF
+
 # from graphattention.GCFmodel import SVD
 # from graphattention.GCFmodel import NCF
 
@@ -27,7 +29,7 @@ from graphattention.GCFmodel import  GCF
 
 
 para = {
-    'model': 'GACF', 
+    'model': 'GACFV2', #[GCF, GACF, GACFV2]
     'epoch': 50,
     'lr': 0.001,
     'weight_decay': 0.0001,
@@ -85,6 +87,8 @@ if para['model'] == 'GACF':
     model = GACF(userNum, itemNum, rt, 128, layers=[128,128,128], droprate=para['droprate']).cuda()
 elif para['model'] == 'GCF':
     model = GCF(userNum, itemNum, rt, 128, layers=[128,128,128]).cuda()
+elif para['model'] == 'GACFV2':
+    model = GACFV2(userNum, itemNum, rt, 128, layers=[128,128,128], droprate=para['droprate']).cuda()
 # model = SVD(userNum,itemNum,50).cuda()
 # model = NCF(userNum,itemNum,64,layers=[128,64,32,16,8]).cuda()
 optim = Adam(model.parameters(), lr=para['lr'],weight_decay=para['weight_decay'])

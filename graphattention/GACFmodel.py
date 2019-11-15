@@ -70,6 +70,15 @@ class GACF(Module):
                 nn.init.xavier_uniform_(m.weight)
                 m.bias.data.zero_()
 
+        nn.init.xavier_uniform_(self.transForm1.weight)
+        self.transForm1.bias.data.zero_()
+
+        nn.init.xavier_uniform_(self.transForm2.weight)
+        self.transForm2.bias.data.zero_()
+
+        nn.init.xavier_uniform_(self.transForm3.weight)
+        self.transForm3.bias.data.zero_()
+
     def getFeatureMat(self):
         uidx = torch.LongTensor([i for i in range(self.userNum)])
         iidx = torch.LongTensor([i for i in range(self.itemNum)])
