@@ -46,6 +46,8 @@ class MultiHeadAttention(Module):
         self.k_linear = nn.Linear(dim, dim)
         self.dropout = nn.Dropout(dropout)
         self.out = nn.Linear(dim, dim)
+        
+        self.__init_weight__()
     
     def __init_weight__(self):
         nn.init.xavier_uniform_(self.q_linear.weight)

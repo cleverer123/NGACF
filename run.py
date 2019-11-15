@@ -25,8 +25,21 @@ from graphattention.GCFmodel import  GCF
 # os.chdir('/home/chenliu/DeepGraphFramework/NeuralCollaborativeFiltering/NGCF-pytorch')
 # rt = load1MRatings()
 
-torch.manual_seed(42)
-np.random.seed(42)
+
+para = {
+    'model': 'GACF', 
+    'epoch': 50,
+    'lr': 0.001,
+    'weight_decay': 0.0001,
+    'batch_size': 2048,
+    'droprate': 0.3,
+    'train': 0.7,
+    'valid': 0.15,
+    'seed': 2019
+}
+
+torch.manual_seed(para['seed'])
+np.random.seed(para['seed'])
 
 rt = load100KRatings()
 userNum = rt['userId'].max()
@@ -58,16 +71,7 @@ rt['itemId'] = rt['itemId'] - 1
 #
 # L = np.dot(np.dot(D_,mat),D_)
 #
-para = {
-    'model': 'GACF', 
-    'epoch': 50,
-    'lr': 0.001,
-    'weight_decay': 0.0001,
-    'batch_size': 2048,
-    'droprate': 0.0,
-    'train': 0.6,
-    'valid': 0.2
-}
+
 
 ds = ML1K(rt)
 trainLen = int(para['train']*len(ds))
@@ -109,7 +113,7 @@ def valid(model, valid_loader, lossfn):
 
 
 # Add summaryWriter. Results are in ./runs/. Run 'tensorboard --logdir=./runs' and see in browser.
-summaryWriter = SummaryWriter(comment='_M:{}_lr:{}_wd:{}_dp:{}'.format(para['model'], para['lr'], para['weight_decay'], para['droprate']))
+summaryWriter = SummaryWriter(comment='_M:{}_lr:{}_wd:{}_dp:{}_rs:{}'.format(para['model'], para['lr'], para['weight_decay'], para['droprate'], para['seed']))
 best_valid = 1
 best_model = None
 for epoch in range(para['epoch']):
