@@ -53,13 +53,14 @@ rt['itemId'] = rt['itemId'] - 1
 # L = np.dot(np.dot(D_,mat),D_)
 #
 para = {
-    'model':'GACF', 
-    'epoch':40,
-    'lr':0.001,
+    'model': 'GACF', 
+    'epoch': 40,
+    'lr': 0.001,
     'weight_decay': 0.0001,
-    'batch_size':2048,
-    'train':0.7,
-    'valid':0.15
+    'batch_size': 2048,
+    'droprate': 0.1,
+    'train': 0.7,
+    'valid': 0.15
 }
 
 ds = ML1K(rt)
@@ -71,7 +72,7 @@ train_loader = DataLoader(train, batch_size=para['batch_size'], shuffle=True,pin
 valid_loader = DataLoader(valid, batch_size=len(valid), shuffle=False,pin_memory=True)
 
 if para['model'] == 'GACF':
-    model = GACF(userNum, itemNum, rt, 128, layers=[128,128,128]).cuda()
+    model = GACF(userNum, itemNum, rt, 128, layers=[128,128,128], droprate=para['droprate']).cuda()
 elif para['model'] == 'GCF':
     model = GCF(userNum, itemNum, rt, 128, layers=[128,128,128]).cuda()
 # model = SVD(userNum,itemNum,50).cuda()
@@ -102,7 +103,7 @@ def valid(model, valid_loader, lossfn):
 
 
 # Add summaryWriter. Results are in ./runs/. Run 'tensorboard --logdir=./runs' and see in browser.
-summaryWriter = SummaryWriter(comment='_M:{}_lr:{}_wd:{}'.format(para['model'], para['lr'], para['weight_decay']))
+summaryWriter = SummaryWriter(comment='_M:{}_lr:{}_wd:{}_dp:{}'.format(para['model'], para['lr'], para['weight_decay'], para['droprate']))
 best_valid = 1
 best_model = None
 for epoch in range(para['epoch']):
@@ -116,14 +117,14 @@ for epoch in range(para['epoch']):
     print('epoch:{}, train_loss:{}, valid_loss:{}'.format(epoch, train_loss, valid_loss))
 
     if best_valid > valid_loss:
-        best_valid, best_epoch, best_model = valid_loss, epoch, model
+        best_valid, best_epoch = valid_loss, epoch
         # RuntimeError: sparse tensors do not have storage
         # torch.save(model, 'best_models/M{}_lr{}_wd{}.model'.format(para['model'], para['lr'], para['weight_decay']))
 
-print('best_model at epoch:{} with valid_loss:{}'.format(best_epoch, best_valid))
+# print('best_model at epoch:{} with valid_loss:{}'.format(best_epoch, best_valid))
 
 test_loader = DataLoader(test,batch_size=len(test),)
-test_loss = valid(best_model, test_loader, lossfn)
+test_loss = valid(model, test_loader, lossfn)
 print('test_loss:', test_loss)
 summaryWriter.add_scalar('loss/test_loss', test_loss, epoch)
 

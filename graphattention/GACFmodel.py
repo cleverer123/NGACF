@@ -105,41 +105,45 @@ class MultiHeadAttention(Module):
         return output
     
 class ATTLayer(Module):
-    def __init__(self, dim, heads, dropout=0.1):
+    def __init__(self, dim, heads, dropout):
         super(ATTLayer, self).__init__()
         self.att_user = MultiHeadAttention(heads, dim, dropout)
         self.att_item = MultiHeadAttention(heads, dim, dropout)
         
-    def forward(self, userEmbs, itemEmbs):
-        return self.att_item(itemEmbs, userEmbs, userEmbs), self.att_user(userEmbs, itemEmbs, itemEmbs)
-
-class GALayer(Module):
-    def __init__(self, dim, heads, dropout=0.1):
-        super(GALayer, self).__init__()
-        self.att = ATTLayer(dim, heads, dropout=0.1)
-
-    def forward(self, userFeatures, itemFeatures, laplacianMat, selfLoop):
-        # attention
-        userFeatures, itemFeatures = self.att(userFeatures, itemFeatures)
+    def forward(self, userFeatures, itemFeatures):
+        # residual = torch.cat([userFeatures,itemFeatures],dim=0)
+        self.att_item(itemFeatures, userFeatures, userFeatures), self.att_user(userFeatures, itemFeatures, itemFeatures)
         features = torch.cat([userFeatures, itemFeatures],dim=0)
+        # features += residual
+        return features
 
-        # graph propagation
+# GraphPropagationLayer
+class GPLayer(Module):
+    def __init__(self):
+        super(GPLayer, self).__init__()
+    
+    def forward(self, features, laplacianMat, selfLoop):
+        # residual = features
         L1 = laplacianMat + selfLoop
         L1 = L1.cuda()
-        return torch.sparse.mm(L1,features)
+        features = torch.sparse.mm(L1,features)
+        # features += residual
+        return features
 
 class GACF(Module):
 
-    def __init__(self,userNum,itemNum,rt,embedSize=256,layers=[256,128,64],useCuda=True):
+    def __init__(self,userNum,itemNum,rt,embedSize=256,layers=[256,128,64], droprate=0.2, useCuda=True):
 
         super(GACF,self).__init__()
         self.useCuda = useCuda
         self.userNum = userNum
         self.itemNum = itemNum
+        self.droprate = droprate
         self.uEmbd = nn.Embedding(userNum,embedSize)
         self.iEmbd = nn.Embedding(itemNum,embedSize)
-
-        self.GAlayers = torch.nn.ModuleList()
+        
+        self.ATTlayers = torch.nn.ModuleList()
+        self.GPlayers = torch.nn.ModuleList()
         self.Affinelayers = torch.nn.ModuleList()
                 
         self.LaplacianMat = self.buildLaplacianMat(rt) # sparse format
@@ -151,7 +155,8 @@ class GACF(Module):
         self.transForm3 = nn.Linear(in_features=32,out_features=1)
 
         for From,To in zip(layers[:-1],layers[1:]):
-            self.GAlayers.append(GALayer(From, 8))
+            self.ATTlayers.append(ATTLayer(From, 8, self.droprate))
+            self.GPlayers.append(GPLayer())
             self.Affinelayers.append(nn.Linear(From,To))
 
     def getFeatureMat(self):
@@ -173,11 +178,15 @@ class GACF(Module):
         
         finalEmbd = features.clone()
 
-        for ga, aff in zip(self.GAlayers, self.Affinelayers):
-            userFeatures, itemFeatures = features[uidx], features[iidx]
+        for att, gp, aff in zip(self.ATTlayers, self.GPlayers, self.Affinelayers):
             residual = features
-            features = ga(userFeatures, itemFeatures, self.LaplacianMat, self.selfLoop)
+
+            userFeatures, itemFeatures = features[uidx], features[iidx]
+            features = att(userFeatures, itemFeatures)
+            features = gp(features, self.LaplacianMat, self.selfLoop)
+            
             features += residual
+            
             features = nn.ReLU()(aff(features))
 
             finalEmbd = torch.cat([finalEmbd, features.clone()],dim=1)
