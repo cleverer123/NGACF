@@ -13,15 +13,21 @@ import numpy as np
 from numpy import diag
 from tensorboardX import SummaryWriter
 
-from graphattention.GACFmodel import GACF, GCF
-from graphattention.GACFmodel import SVD
-from graphattention.GACFmodel import NCF
+from graphattention.GACFmodel import GACF
+
 from graphattention.dataPreprosessing import ML1K
 
+from graphattention.GCFmodel import  GCF
+# from graphattention.GCFmodel import SVD
+# from graphattention.GCFmodel import NCF
 
 # import os
 # os.chdir('/home/chenliu/DeepGraphFramework/NeuralCollaborativeFiltering/NGCF-pytorch')
 # rt = load1MRatings()
+
+torch.manual_seed(42)
+np.random.seed(42)
+
 rt = load100KRatings()
 userNum = rt['userId'].max()
 print('userNum', userNum)
@@ -54,13 +60,13 @@ rt['itemId'] = rt['itemId'] - 1
 #
 para = {
     'model': 'GACF', 
-    'epoch': 40,
+    'epoch': 50,
     'lr': 0.001,
     'weight_decay': 0.0001,
     'batch_size': 2048,
-    'droprate': 0.1,
-    'train': 0.7,
-    'valid': 0.15
+    'droprate': 0.0,
+    'train': 0.6,
+    'valid': 0.2
 }
 
 ds = ML1K(rt)
@@ -126,6 +132,6 @@ for epoch in range(para['epoch']):
 test_loader = DataLoader(test,batch_size=len(test),)
 test_loss = valid(model, test_loader, lossfn)
 print('test_loss:', test_loss)
-summaryWriter.add_scalar('loss/test_loss', test_loss, epoch)
+# summaryWriter.add_scalar('loss/test_loss', test_loss, epoch)
 
 
