@@ -100,13 +100,13 @@ class GACFV2(Module):
         finalEmbd = features.clone()
 
         for att, gp, aff in zip(self.ATTlayers, self.GPlayers, self.Affinelayers):
-            residual = features
+            # residual = features
 
             userFeatures, itemFeatures = features[uidx], features[iidx]
             features = att(userFeatures, itemFeatures)
             features = gp(features, self.LaplacianMat, self.selfLoop)
             
-            features += residual
+            # features += residual
 
             features = nn.ReLU()(aff(features))
 
