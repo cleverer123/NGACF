@@ -42,11 +42,11 @@ class GALayer(Module):
         # feature2 = self.affine2(torch.sparse.mm(L2, inter_feature))
         return feature1 + feature2
 
-class GACFV4(Module):
+class GACFV6(Module):
 
     def __init__(self,userNum,itemNum,rt,embedSize=256,layers=[256,128,64], droprate=0.2, useCuda=True):
 
-        super(GACFV4,self).__init__()
+        super(GACFV6,self).__init__()
         self.useCuda = useCuda
         self.userNum = userNum
         self.itemNum = itemNum

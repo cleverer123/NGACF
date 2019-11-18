@@ -13,12 +13,12 @@ import numpy as np
 from numpy import diag
 from tensorboardX import SummaryWriter
 
-from graphattention.GACFmodel import GACF
+from graphattention.GACFmodel1 import GACFV1
 from graphattention.GACFmodel2 import GACFV2
-from graphattention.GACFmodel2_1 import GACFV2_1
 from graphattention.GACFmodel3 import GACFV3
 from graphattention.GACFmodel4 import GACFV4
 from graphattention.GACFmodel5 import GACFV5
+from graphattention.GACFmodel6 import GACFV6
 
 from graphattention.dataPreprosessing import ML1K
 
@@ -34,7 +34,7 @@ from graphattention.GCFmodel import  GCF
 
 para = {
     'dataset': 'ml100k', #[ml100k, ml1m]
-    'model': 'GACFV2', #[GCF, GACFV1, GACFV2, GACFV3, GACFV4, GACFV5, GACFV6]
+    'model': 'GACFV1', #[GCF, GACFV1, GACFV2, GACFV3, GACFV4, GACFV5, GACFV6]
     'epoch': 50,
     'lr': 0.001,
     'weight_decay': 0.0001,
