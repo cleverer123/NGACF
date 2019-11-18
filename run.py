@@ -94,18 +94,18 @@ valid_loader = DataLoader(valid, batch_size=len(valid), shuffle=False,pin_memory
 
 if para['model'] == 'GCF':
     model = GCF(userNum, itemNum, rt, 128, layers=[128,128,128]).cuda()
-elif para['model'] == 'GACF':
-    model = GACF(userNum, itemNum, rt, 128, layers=[128,128,128], droprate=para['droprate']).cuda()
+elif para['model'] == 'GACFV1':
+    model = GACFV1(userNum, itemNum, rt, 128, layers=[128,128,128], droprate=para['droprate']).cuda()
 elif para['model'] == 'GACFV2':
     model = GACFV2(userNum, itemNum, rt, 128, layers=[128,128,128], droprate=para['droprate']).cuda()
-elif para['model'] == 'GACFV2_1':
-    model = GACFV2_1(userNum, itemNum, rt, 128, layers=[128,128,128], droprate=para['droprate']).cuda()
 elif para['model'] == 'GACFV3':
     model = GACFV2(userNum, itemNum, rt, 128, layers=[128,128,128], droprate=para['droprate']).cuda()
 elif para['model'] == 'GACFV4':
     model = GACFV4(userNum, itemNum, rt, 128, layers=[128,128,128], droprate=para['droprate']).cuda()
 elif para['model'] == 'GACFV5':
     model = GACFV5(userNum, itemNum, rt, 128, layers=[128,128,128], droprate=para['droprate']).cuda()
+elif para['model'] == 'GACFV6':
+    model = GACFV6(userNum, itemNum, rt, 128, layers=[128,128,128], droprate=para['droprate']).cuda()
 # model = SVD(userNum,itemNum,50).cuda()
 # model = NCF(userNum,itemNum,64,layers=[128,64,32,16,8]).cuda()
 optim = Adam(model.parameters(), lr=para['lr'],weight_decay=para['weight_decay'])
