@@ -15,6 +15,10 @@ from tensorboardX import SummaryWriter
 
 from graphattention.GACFmodel import GACF
 from graphattention.GACFmodel2 import GACFV2
+from graphattention.GACFmodel2_1 import GACFV2_1
+from graphattention.GACFmodel3 import GACFV3
+from graphattention.GACFmodel4 import GACFV4
+from graphattention.GACFmodel5 import GACFV5
 
 from graphattention.dataPreprosessing import ML1K
 
@@ -25,16 +29,17 @@ from graphattention.GCFmodel import  GCF
 
 # import os
 # os.chdir('/home/chenliu/DeepGraphFramework/NeuralCollaborativeFiltering/NGCF-pytorch')
-# rt = load1MRatings()
+
 
 
 para = {
-    'model': 'GACFV2', #[GCF, GACF, GACFV2]
+    'dataset': 'ml100k', #[ml100k, ml1m]
+    'model': 'GACFV2', #[GCF, GACFV1, GACFV2, GACFV3, GACFV4, GACFV5, GACFV6]
     'epoch': 50,
     'lr': 0.001,
     'weight_decay': 0.0001,
     'batch_size': 2048,
-    'droprate': 0.3,
+    'droprate': 0.1,
     'train': 0.7,
     'valid': 0.15,
     'seed': 2019
@@ -43,7 +48,11 @@ para = {
 torch.manual_seed(para['seed'])
 np.random.seed(para['seed'])
 
-rt = load100KRatings()
+if para['dataset'] == 'ml1m':
+    rt = load1MRatings()
+elif para['dataset'] == 'ml100k':
+    rt = load100KRatings()
+
 userNum = rt['userId'].max()
 print('userNum', userNum)
 itemNum = rt['itemId'].max()
@@ -83,12 +92,20 @@ train, valid, test = random_split(ds,[trainLen, validLen, len(ds)- validLen -tra
 train_loader = DataLoader(train, batch_size=para['batch_size'], shuffle=True,pin_memory=True)
 valid_loader = DataLoader(valid, batch_size=len(valid), shuffle=False,pin_memory=True)
 
-if para['model'] == 'GACF':
-    model = GACF(userNum, itemNum, rt, 128, layers=[128,128,128], droprate=para['droprate']).cuda()
-elif para['model'] == 'GCF':
+if para['model'] == 'GCF':
     model = GCF(userNum, itemNum, rt, 128, layers=[128,128,128]).cuda()
+elif para['model'] == 'GACF':
+    model = GACF(userNum, itemNum, rt, 128, layers=[128,128,128], droprate=para['droprate']).cuda()
 elif para['model'] == 'GACFV2':
     model = GACFV2(userNum, itemNum, rt, 128, layers=[128,128,128], droprate=para['droprate']).cuda()
+elif para['model'] == 'GACFV2_1':
+    model = GACFV2_1(userNum, itemNum, rt, 128, layers=[128,128,128], droprate=para['droprate']).cuda()
+elif para['model'] == 'GACFV3':
+    model = GACFV2(userNum, itemNum, rt, 128, layers=[128,128,128], droprate=para['droprate']).cuda()
+elif para['model'] == 'GACFV4':
+    model = GACFV4(userNum, itemNum, rt, 128, layers=[128,128,128], droprate=para['droprate']).cuda()
+elif para['model'] == 'GACFV5':
+    model = GACFV5(userNum, itemNum, rt, 128, layers=[128,128,128], droprate=para['droprate']).cuda()
 # model = SVD(userNum,itemNum,50).cuda()
 # model = NCF(userNum,itemNum,64,layers=[128,64,32,16,8]).cuda()
 optim = Adam(model.parameters(), lr=para['lr'],weight_decay=para['weight_decay'])
@@ -117,7 +134,7 @@ def valid(model, valid_loader, lossfn):
 
 
 # Add summaryWriter. Results are in ./runs/. Run 'tensorboard --logdir=./runs' and see in browser.
-summaryWriter = SummaryWriter(comment='_M:{}_lr:{}_wd:{}_dp:{}_rs:{}'.format(para['model'], para['lr'], para['weight_decay'], para['droprate'], para['seed']))
+summaryWriter = SummaryWriter(comment='_DS:{}_M:{}_lr:{}_wd:{}_dp:{}_rs:{}'.format(para['dataset'], para['model'], para['lr'], para['weight_decay'], para['droprate'], para['seed']))
 best_valid = 1
 best_model = None
 for epoch in range(para['epoch']):

@@ -7,34 +7,43 @@ from scipy import sparse
 import numpy as np
 
 from graphattention.modules import MultiHeadAttention, ATTLayer
+# GACFV3: 在GACFV1的基础上，去掉interactive部分的Element-wise Product. attention作用于原始feature和interative feature两部分。
 
-# several models for recommendations
+class GALayer(Module):
+    def __init__(self, input_dim, out_dim, heads, dropout):
+        super(GALayer, self).__init__()
+        self.att = ATTLayer(input_dim, heads, dropout)
+        
+        self.affine1 = nn.Linear(input_dim, out_dim)
+        self.affine2 = nn.Linear(input_dim, out_dim)
+        
+        self._init_weight_()
 
-# RMSE
-# SVD dim = 50 50 epoch RMSE = 0.931
-# GNCF dim = 64 layer = [64,64,64] nn = [128,64,32,] 50 epoch RMSE = 0.916/RMSE =0.914
-# NCF dim = 64 50 nn = [128,54,32] epoch 50 RMSE = 0.928
+    def _init_weight_(self):
+        nn.init.xavier_uniform_(self.affine1.weight)
+        self.affine1.bias.data.zero_()
 
-
-
-# GraphPropagationLayer
-class GPLayer(Module):
-    def __init__(self):
-        super(GPLayer, self).__init__()
+        nn.init.xavier_uniform_(self.affine2.weight)
+        self.affine2.bias.data.zero_()
     
-    def forward(self, features, laplacianMat, selfLoop):
-        # residual = features
+    def forward(self, userFeatures, itemFeatures, laplacianMat, selfLoop):
+        # attention
+        features = self.att(userFeatures, itemFeatures)
+
         L1 = laplacianMat + selfLoop
         L1 = L1.cuda()
-        features = torch.sparse.mm(L1,features)
-        # features += residual
-        return features
+        feature1 = self.affine1(torch.sparse.mm(L1,features))
 
-class GACF(Module):
+        L2 = laplacianMat.cuda()
+        # inter_feature = torch.mul(features,features)
+        feature2 = self.affine2(torch.sparse.mm(L2, features))
+        return feature1 + feature2
+
+class GACFV3(Module):
 
     def __init__(self,userNum,itemNum,rt,embedSize=256,layers=[256,128,64], droprate=0.2, useCuda=True):
 
-        super(GACF,self).__init__()
+        super(GACFV3,self).__init__()
         self.useCuda = useCuda
         self.userNum = userNum
         self.itemNum = itemNum
@@ -42,9 +51,8 @@ class GACF(Module):
         self.uEmbd = nn.Embedding(userNum,embedSize)
         self.iEmbd = nn.Embedding(itemNum,embedSize)
         
-        self.ATTlayers = torch.nn.ModuleList()
-        self.GPlayers = torch.nn.ModuleList()
-        self.Affinelayers = torch.nn.ModuleList()
+        self.GALayers = torch.nn.ModuleList()
+        
                 
         self.LaplacianMat = self.buildLaplacianMat(rt) # sparse format
         self.leakyRelu = nn.LeakyReLU()
@@ -55,21 +63,15 @@ class GACF(Module):
         self.transForm3 = nn.Linear(in_features=32,out_features=1)
 
         for From,To in zip(layers[:-1],layers[1:]):
-            self.ATTlayers.append(ATTLayer(From, 8, self.droprate))
-            self.GPlayers.append(GPLayer())
-            self.Affinelayers.append(nn.Linear(From,To))
-
+            self.GALayers.append(GALayer(From, To, 8, self.droprate))
+        
         self._init_weight_()
 
     def _init_weight_(self):
         nn.init.normal_(self.uEmbd.weight, std=0.01)
         nn.init.normal_(self.iEmbd.weight, std=0.01)
 
-        for m in self.Affinelayers:
-            if isinstance(m, nn.Linear):
-                nn.init.xavier_uniform_(m.weight)
-                m.bias.data.zero_()
-
+        
         nn.init.xavier_uniform_(self.transForm1.weight)
         self.transForm1.bias.data.zero_()
 
@@ -98,16 +100,10 @@ class GACF(Module):
         
         finalEmbd = features.clone()
 
-        for att, gp, aff in zip(self.ATTlayers, self.GPlayers, self.Affinelayers):
-            residual = features
+        for ga in self.GALayers:
 
             userFeatures, itemFeatures = features[uidx], features[iidx]
-            features = att(userFeatures, itemFeatures)
-            features = gp(features, self.LaplacianMat, self.selfLoop)
-            
-            features += residual
-
-            features = nn.ReLU()(aff(features))
+            features = ga(userFeatures, itemFeatures, self.LaplacianMat, self.selfLoop)
 
             finalEmbd = torch.cat([finalEmbd, features.clone()],dim=1)
 
@@ -126,6 +122,7 @@ class GACF(Module):
 
         return prediction        
         
+
     def getSparseEye(self,num):
         i = torch.LongTensor([[k for k in range(0,num)],[j for j in range(0,num)]])
         val = torch.FloatTensor([1]*num)
@@ -154,16 +151,3 @@ class GACF(Module):
         data = torch.FloatTensor(L.data)
         SparseL = torch.sparse.FloatTensor(i,data)
         return SparseL
-
-
-
-if __name__ == '__main__':
-    from toyDataset.loaddata import load100KRatings
-
-    rt = load100KRatings()
-    userNum = rt['userId'].max()
-    itemNum = rt['itemId'].max()
-
-    rt['userId'] = rt['userId'] - 1
-    rt['itemId'] = rt['itemId'] - 1
-    # gcf = GCF(userNum,itemNum,rt)

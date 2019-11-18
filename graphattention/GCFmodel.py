@@ -62,6 +62,15 @@ class GNNLayer(Module):
         self.outF = outF
         self.linear = torch.nn.Linear(in_features=inF,out_features=outF)
         self.interActTransform = torch.nn.Linear(in_features=inF,out_features=outF)
+        
+        self._init_weight_()
+
+    def _init_weight_(self):
+        nn.init.xavier_uniform_(self.linear.weight)
+        self.linear.bias.data.zero_()
+
+        nn.init.xavier_uniform_(self.interActTransform.weight)
+        self.interActTransform.bias.data.zero_()
 
     def forward(self, laplacianMat,selfLoop,features):
         # for GCF ajdMat is a (N+M) by (N+M) mat
@@ -98,6 +107,21 @@ class GCF(Module):
 
         for From,To in zip(layers[:-1],layers[1:]):
             self.GNNlayers.append(GNNLayer(From,To))
+        
+        self._init_weight_()
+
+    def _init_weight_(self):
+        nn.init.normal_(self.uEmbd.weight, std=0.01)
+        nn.init.normal_(self.iEmbd.weight, std=0.01)
+
+        nn.init.xavier_uniform_(self.transForm1.weight)
+        self.transForm1.bias.data.zero_()
+
+        nn.init.xavier_uniform_(self.transForm2.weight)
+        self.transForm2.bias.data.zero_()
+
+        nn.init.xavier_uniform_(self.transForm3.weight)
+        self.transForm3.bias.data.zero_()
 
     def getSparseEye(self,num):
         i = torch.LongTensor([[k for k in range(0,num)],[j for j in range(0,num)]])
