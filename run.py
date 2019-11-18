@@ -147,9 +147,11 @@ for epoch in range(para['epoch']):
     print('epoch:{}, train_loss:{:5f}, test_loss:{:5f}'.format(epoch, train_loss, test_loss))
 
     if para['evaluate'] == 'RANK':
+        start_time = time.time()
         HR, NDCG = eval_rank(model, test_loader, lossfn, 10)
         summaryWriter.add_scalar('metrics/HR', HR, epoch)
         summaryWriter.add_scalar('metrics/NDCG', NDCG, epoch)
+        print("The time of evaluate epoch {:03d}".format(epoch) + " is: " + time.strftime("%H: %M: %S", time.gmtime(time.time() - start_time)))
         print('epoch:{}, HR:{:5f}, NDCG:{:5f}'.format(epoch, HR, NDCG))
     
 
