@@ -13,6 +13,8 @@ import numpy as np
 from numpy import diag
 from tensorboardX import SummaryWriter
 
+from graphattention.evaluation import hit, ndcg
+
 from graphattention.GACFmodel1 import GACFV1
 from graphattention.GACFmodel2 import GACFV2
 from graphattention.GACFmodel3 import GACFV3
@@ -20,12 +22,10 @@ from graphattention.GACFmodel4 import GACFV4
 from graphattention.GACFmodel5 import GACFV5
 from graphattention.GACFmodel6 import GACFV6
 
-from graphattention.dataPreprosessing import ML1K
-
 from graphattention.GCFmodel import  GCF
 
 # from graphattention.GCFmodel import SVD
-# from graphattention.GCFmodel import NCF
+from graphattention.GCFmodel import NCF
 
 # import os
 # os.chdir('/home/chenliu/DeepGraphFramework/NeuralCollaborativeFiltering/NGCF-pytorch')
@@ -34,7 +34,7 @@ from graphattention.GCFmodel import  GCF
 ######################################## PARAMETERS #################################
 para = {
     'dataset': 'ml100k', #[ml100k, ml1m]
-    'model': 'GCF', #[GCF, GACFV1, GACFV2, GACFV3, GACFV4, GACFV5, GACFV6]
+    'model': 'GCF', #[NCF, GCF, GACFV1, GACFV2, GACFV3, GACFV4, GACFV5, GACFV6]
     'epoch': 50,
     'lr': 0.001,
     'weight_decay': 0.0001,
@@ -48,44 +48,25 @@ para = {
     'evaluate': 'RANK' # [MSE, RANK]
 }
 
+
 torch.manual_seed(para['seed'])
 np.random.seed(para['seed'])
 
 ######################################## PREPARE DATA #################################
-if para['dataset'] == 'ml1m':
-    rt = load1MRatings()
-elif para['dataset'] == 'ml100k':
-    rt = load100KRatings()
 
-userNum = rt['userId'].max()
-print('userNum', userNum)
-itemNum = rt['itemId'].max()
-print('itemNum', itemNum)
+rt, train_data, test_data, userNum, itemNum = load_data(para['dataset'], para['evaluate'], para['train'])
 
-rt['userId'] = rt['userId'] - 1
-rt['itemId'] = rt['itemId'] - 1
 
-if para['evaluate'] == 'MSE':
-    ds = rt.values
-    ds = ML1K(ds)
-    trainLen = int(para['train']*len(ds))
-    train, test = random_split(ds,[trainLen, len(ds)-trainLen])
+test_batch_size = len(test_data) if 'MSE' == para['evaluate'] else 100
 
-    train_loader = DataLoader(train, batch_size=para['batch_size'], shuffle=True,pin_memory=True)
-    test_loader = DataLoader(test,batch_size=len(test), shuffle=False, pin_memory=True)
-
-if para['evaluate'] == 'RANK':
-    train_data, test_data = load_data(rt, para['train'])
-
-    train_data = ML1K(train_data)
-    test_data = ML1K(test_data)
-
-    train_loader = DataLoader(train_data, batch_size=para['batch_size'], shuffle=True, pin_memory=True)
-    test_loader = DataLoader(test_data, batch_size=len(test_data), shuffle=False, pin_memory=True)
+train_loader = DataLoader(train_data, batch_size=para['batch_size'], shuffle=True,pin_memory=True)
+test_loader = DataLoader(test_data, batch_size=test_batch_size, shuffle=False, pin_memory=True)
 
 
 ######################################## CREATE MODELS #################################
-if para['model'] == 'GCF':
+if para['model'] == 'NCF':
+    model = NCF(userNum, itemNum, 64, layers=[128,64,32,16,8]).cuda()
+elif para['model'] == 'GCF':
     model = GCF(userNum, itemNum, rt, embedSize=para['embedSize'], layers=para['layers']).cuda()
 elif para['model'] == 'GACFV1':
     model = GACFV1(userNum, itemNum, rt, embedSize=para['embedSize'], layers=para['layers'], droprate=para['droprate']).cuda()
@@ -102,7 +83,7 @@ elif para['model'] == 'GACFV6':
 # model = SVD(userNum,itemNum,50).cuda()
 
 # model = NCF(userNum,itemNum,64,layers=[128,64,32,16,8]).cuda()
-optim = Adam(model.parameters(), lr=para['lr'],weight_decay=para['weight_decay'])
+optim = Adam(model.parameters(), lr=para['lr'], weight_decay=para['weight_decay'])
 if para['evaluate'] == 'MSE':
     lossfn = MSELoss()
 if para['evaluate'] == 'RANK':
@@ -114,8 +95,8 @@ def train(model, train_loader, optim, lossfn):
     total_loss = 0.0
     for _, batch in enumerate(train_loader):
         optim.zero_grad()
-        prediction = model(batch[0].cuda(), batch[1].cuda())
-        loss = lossfn(batch[2].float().cuda(),prediction)
+        prediction = model(batch[0].long().cuda(), batch[1].long().cuda())
+        loss = lossfn(prediction, batch[2].float().cuda())
         # print("label",batch[2].float().cuda())
         # print("prediction",prediction)
         loss.backward()
@@ -127,11 +108,25 @@ def test(model, test_loader, lossfn):
     model.eval()
     total_loss = 0.0
     for _, batch in enumerate(test_loader):
-        prediction = model(batch[0].cuda(), batch[1].cuda())
-        loss = lossfn(batch[2].float().cuda(),prediction)
+        prediction = model(batch[0].long().cuda(), batch[1].long().cuda())
+        loss = lossfn(prediction, batch[2].float().cuda())
         total_loss += loss.item()
     return total_loss/len(test_loader)
 
+def eval_rank(model, test_loader, lossfn, top_k):
+    model.eval()
+    HR, NDCG = [], []
+    for _, batch in enumerate(test_loader):
+        u_idx = batch[0].long().cuda()
+        i_idx = batch[1].long().cuda()
+        prediction = model(u_idx, i_idx)
+        _, indices = torch.topk(prediction, top_k)
+        recommends = torch.take(i_idx, indices).cpu().numpy().tolist()
+        gt_item = i_idx[0].item()
+        HR.append(hit(gt_item, recommends))
+        NDCG.append(ndcg(gt_item, recommends))
+
+    return np.mean(HR), np.mean(NDCG)
 
 # Add summaryWriter. Results are in ./runs/. Run 'tensorboard --logdir=./runs' and see in browser.
 summaryWriter = SummaryWriter(comment='_DS:{}_M:{}_Layer:{}_lr:{}_wd:{}_dp:{}_rs:{}'.
@@ -149,7 +144,14 @@ for epoch in range(para['epoch']):
     summaryWriter.add_scalar('loss/test_loss', test_loss, epoch)
     
     print("The time elapse of epoch {:03d}".format(epoch) + " is: " + time.strftime("%H: %M: %S", time.gmtime(time.time() - start_time)))
-    print('epoch:{}, train_loss:{}, test_loss:{}'.format(epoch, train_loss, test_loss))
+    print('epoch:{}, train_loss:{:5f}, test_loss:{:5f}'.format(epoch, train_loss, test_loss))
+
+    if para['evaluate'] == 'RANK':
+        HR, NDCG = eval_rank(model, test_loader, lossfn, 10)
+        summaryWriter.add_scalar('metrics/HR', HR, epoch)
+        summaryWriter.add_scalar('metrics/NDCG', NDCG, epoch)
+        print('epoch:{}, HR:{:5f}, NDCG:{:5f}'.format(epoch, HR, NDCG))
+    
 
     if best_test > test_loss:
         best_test, best_epoch = test_loss, epoch
