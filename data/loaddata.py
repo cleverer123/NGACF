@@ -8,6 +8,8 @@ from torch.utils.data import random_split
 import scipy.sparse as sp
 from scipy.sparse.coo import coo_matrix 
 
+from data.mldataset import MLDataSet
+
 # load 100k data
 # path100k = path.dirname(__file__) + r'\1K'
 path100k = path.dirname(__file__) + '/1K'
@@ -37,7 +39,7 @@ def load100kUserSide():
 
 
 # load_data: prepare data with negative sampling for training and test
-def load_data(df, ratio_train):
+def load_data_negsampl(df):
 
     df = rating_process(df)
     train_df, test_df = split_loo(df)
@@ -50,8 +52,34 @@ def load_data(df, ratio_train):
     print("训练集数目（after negative sampling）",train_data.shape)
     print("测试集数目（after negative sampling）",test_data.shape)
 
-    print(train_data)
+    # print(train_data)
     return train_data, test_data
+
+def load_data(dataset, evaluate, ratio_train):
+    if dataset == 'ml1m':
+        rt = load1MRatings()
+    elif dataset == 'ml100k':
+        rt = load100KRatings()
+    
+    userNum = rt['userId'].max()
+    print('userNum', userNum)
+    itemNum = rt['itemId'].max()
+    print('itemNum', itemNum)
+
+    rt['userId'] = rt['userId'] - 1
+    rt['itemId'] = rt['itemId'] - 1
+
+    if evaluate == 'MSE':
+        ds = rt.values
+        ds = MLDataSet(ds)
+        trainLen = int(ratio_train*len(ds))
+        train_data, test_data = random_split(ds,[trainLen, len(ds)-trainLen])
+    
+    if evaluate == 'RANK':
+        train_data, test_data = load_data_negsampl(rt)
+        train_data = MLDataSet(train_data)
+        test_data = MLDataSet(test_data)
+    return rt, train_data, test_data, userNum, itemNum
 
 
 # rating_process: binarizing or normalizing the column rating

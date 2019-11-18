@@ -1,11 +1,9 @@
 from torch.utils.data import Dataset
 
-# movielens 1k
-
-class ML1K(Dataset):
+class MLDataSet(Dataset):
 
     def __init__(self,rt):
-        super(Dataset,self).__init__()
+        super(MLDataSet,self).__init__()
         # self.uId = list(rt['userId'])
         # self.iId = list(rt['itemId'])
         # self.rt = list(rt['rating'])
