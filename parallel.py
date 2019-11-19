@@ -63,7 +63,7 @@ class Reduce(Function):
     def backward(ctx, gradOutput):
         return Broadcast.apply(ctx.target_gpus, gradOutput)
 
-class DistributedDataParallelModel(DistributedDataParallel):
+# class DistributedDataParallelModel(DistributedDataParallel):
     """Implements data parallelism at the module level for the DistributedDataParallel module.
     This container parallelizes the application of the given module by
     splitting the input across the specified devices by chunking in the
@@ -87,8 +87,8 @@ class DistributedDataParallelModel(DistributedDataParallel):
         >>> net = encoding.nn.DistributedDataParallelModel(model, device_ids=[0, 1, 2])
         >>> y = net(x)
     """
-    def gather(self, outputs, output_device):
-        return outputs
+    # def gather(self, outputs, output_device):
+        # return outputs
 
 class DataParallelModel(DataParallel):
     """Implements data parallelism at the module level.
