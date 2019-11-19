@@ -63,6 +63,7 @@ class Reduce(Function):
     def backward(ctx, gradOutput):
         return Broadcast.apply(ctx.target_gpus, gradOutput)
 
+
 # class DistributedDataParallelModel(DistributedDataParallel):
     """Implements data parallelism at the module level for the DistributedDataParallel module.
     This container parallelizes the application of the given module by

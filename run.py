@@ -28,6 +28,7 @@ from graphattention.GCFmodel import  GCF
 from graphattention.GCFmodel import NCF
 
 from parallel import DataParallelModel, DataParallelCriterion
+
 # import os
 # os.chdir('/home/chenliu/DeepGraphFramework/NeuralCollaborativeFiltering/NGCF-pytorch')
 
