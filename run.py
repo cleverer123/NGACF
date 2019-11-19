@@ -1,4 +1,5 @@
 import time
+import argparse 
 import torch
 from torch import nn as nn
 from torch.optim import Adam
@@ -27,13 +28,14 @@ from graphattention.GCFmodel import  GCF
 # from graphattention.GCFmodel import SVD
 from graphattention.GCFmodel import NCF
 
+from parallel import DataParallelModel, DataParallelCriterion
 # import os
 # os.chdir('/home/chenliu/DeepGraphFramework/NeuralCollaborativeFiltering/NGCF-pytorch')
 
 
 ######################################## PARAMETERS #################################
 para = {
-    'dataset': 'ml100k', #[ml100k, ml1m]
+    'dataset': 'ml1m', #[ml100k, ml1m]
     'model': 'GCF', #[NCF, GCF, GACFV1, GACFV2, GACFV3, GACFV4, GACFV5, GACFV6]
     'epoch': 50,
     'lr': 0.001,
@@ -47,7 +49,20 @@ para = {
     'embedSize': 128,
     'evaluate': 'RANK' # [MSE, RANK]
 }
-
+# parser = argparse.ArgumentParser(description='Neural Graph Attention Collaborative Filtering')
+# parser.add_argument("--dataset", type=str, default="ml100k", help="which dataset to use(ml100k/ml1m/Amazon])")  
+# parser.add_argument("--model", type=str, default="GCF", help="which model to use(NCF, GCF, GACFV1, GACFV2, GACFV3, GACFV4, GACFV5, GACFV6)")
+# parser.add_argument("--epochs", type=int, default=50, help="training epoches")
+# parser.add_argument("--lr", type=float, default=0.001, help="learning rate")
+# parser.add_argument("--weight_decay", type=float, default=0.0001, help="weight_decay")
+# parser.add_argument("--batch_size", type=int, default=2048, help="input batch size for training")
+# parser.add_argument("--droprate", type=float, default=0.1, help="the rate for dropout")
+# parser.add_argument("--train", type=float, default=0.7, help="the train rate of dataset")
+# parser.add_argument("--seed", type=int, default=2019, help="the seed for random")
+# parser.add_argument("--embedSize", type=int, default=128, help="the size for Embedding layer")
+# parser.add_argument("--layers", type=list, default=[128,128,], help="the layer list for propagation")
+# parser.add_argument("--evaluate", type=str, default="RANK", help="the way for evaluate")
+# args = parser.parse_args()
 
 torch.manual_seed(para['seed'])
 np.random.seed(para['seed'])
@@ -81,45 +96,47 @@ elif para['model'] == 'GACFV5':
 elif para['model'] == 'GACFV6':
     model = GACFV6(userNum, itemNum, rt, embedSize=para['embedSize'], layers=para['layers'], droprate=para['droprate']).cuda()
 # model = SVD(userNum,itemNum,50).cuda()
-
 # model = NCF(userNum,itemNum,64,layers=[128,64,32,16,8]).cuda()
+
+parallel_model = DataParallelModel(model)       # 并行化model
+
 optim = Adam(model.parameters(), lr=para['lr'], weight_decay=para['weight_decay'])
 if para['evaluate'] == 'MSE':
     lossfn = MSELoss()
+    parallel_loss = DataParallelCriterion(lossfn)       # 并行化损失函数
 if para['evaluate'] == 'RANK':
     lossfn = BCEWithLogitsLoss()
+    parallel_loss = DataParallelCriterion(lossfn)
 
 ######################################## TRAINING #################################
-def train(model, train_loader, optim, lossfn):
-    model.train()
+def train(parallel_model, train_loader, optim, lossfn):
+    parallel_model.train()
     total_loss = 0.0
     for _, batch in enumerate(train_loader):
         optim.zero_grad()
-        prediction = model(batch[0].long().cuda(), batch[1].long().cuda())
-        loss = lossfn(prediction, batch[2].float().cuda())
-        # print("label",batch[2].float().cuda())
-        # print("prediction",prediction)
+        prediction = parallel_model(batch[0].long().cuda(), batch[1].long().cuda())
+        loss = parallel_loss(prediction, batch[2].float().cuda())
         loss.backward()
         optim.step()
         total_loss += loss.item()
     return total_loss/len(train_loader)
 
-def test(model, test_loader, lossfn):
-    model.eval()
+def test(parallel_model, test_loader, lossfn):
+    parallel_model.eval()
     total_loss = 0.0
     for _, batch in enumerate(test_loader):
-        prediction = model(batch[0].long().cuda(), batch[1].long().cuda())
-        loss = lossfn(prediction, batch[2].float().cuda())
+        prediction = parallel_model(batch[0].long().cuda(), batch[1].long().cuda())
+        loss = parallel_loss(prediction, batch[2].float().cuda())
         total_loss += loss.item()
     return total_loss/len(test_loader)
 
-def eval_rank(model, test_loader, lossfn, top_k):
-    model.eval()
+def eval_rank(parallel_model, test_loader, lossfn, top_k):
+    parallel_model.eval()
     HR, NDCG = [], []
     for _, batch in enumerate(test_loader):
         u_idx = batch[0].long().cuda()
         i_idx = batch[1].long().cuda()
-        prediction = model(u_idx, i_idx)
+        prediction = parallel_model(u_idx, i_idx)
         _, indices = torch.topk(prediction, top_k)
         recommends = torch.take(i_idx, indices).cpu().numpy().tolist()
         gt_item = i_idx[0].item()

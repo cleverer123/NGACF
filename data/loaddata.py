@@ -10,19 +10,11 @@ from scipy.sparse.coo import coo_matrix
 
 from data.mldataset import MLDataSet
 
-# load 100k data
-# path100k = path.dirname(__file__) + r'\1K'
+# dataset:movielens100K
 path100k = path.dirname(__file__) + '/1K'
 
 def load100KRatings():
-    # df = pd.read_table(path100k+r'\u.data',sep='\t',names=['userId','itemId','rating','timestamp'])
     df = pd.read_table(path100k + '/u.data',sep='\t',names=['userId','itemId','rating','timestamp'])
-    return df
-
-path1M = path.dirname(__file__) + '/1M'
-def load1MRatings():
-    # df = pd.read_table(path100k+r'\u.data',sep='\t',names=['userId','itemId','rating','timestamp'])
-    df = pd.read_table(path1M + '/ratings.dat',sep='::',names=['userId','itemId','rating','timestamp'])
     return df
 
 def load100KItemSide():
@@ -37,12 +29,33 @@ def load100kUserSide():
         users = pd.read_table(f, delimiter='|', header=None,names="userId| age | gender | occupation | zip code".split('|'))
     return users
 
+# dataset:movielens1M
+path1M = path.dirname(__file__) + '/1M'
+def load1MRatings():
+    # df = pd.read_table(path100k+r'\u.data',sep='\t',names=['userId','itemId','rating','timestamp'])
+    df = pd.read_table(path1M + '/ratings.dat',sep='::',names=['userId','itemId','rating','timestamp'])
+    return df
+
+# dataset:Amazonbook
+pathAmazon = path.dirname(__file__) + '/Amazon'
+def loadAmazonbook():
+    df = pd.read_table(pathAmazon + '/data.csv',sep=',', names=['userId','itemId','rating'])
+    return df
+
+def split_data(df, dataset, ratio_train):
+    if dataset == "Amazon":
+        train_len = len(df) * ratio_train
+        train_df = df.iloc[:train_len, ]
+        test_df = df.iloc[train_len:, ]
+    else:
+        train_df, test_df = split_loo(df)
+    return train_df, test_df 
 
 # load_data: prepare data with negative sampling for training and test
-def load_data_negsampl(df):
+def load_data_negsample(df, dataset, ratio_train):
 
     df = rating_process(df)
-    train_df, test_df = split_loo(df)
+    train_df, test_df = split_data(df, dataset, ratio_train)
     print("训练集数目：", len(train_df))
     print("测试集数目：", len(test_df))
     negatives = negtive_sampler(df)
@@ -60,6 +73,8 @@ def load_data(dataset, evaluate, ratio_train):
         rt = load1MRatings()
     elif dataset == 'ml100k':
         rt = load100KRatings()
+    else:
+        rt = loadAmazonbook()
     
     userNum = rt['userId'].max()
     print('userNum', userNum)
@@ -76,9 +91,10 @@ def load_data(dataset, evaluate, ratio_train):
         train_data, test_data = random_split(ds,[trainLen, len(ds)-trainLen])
     
     if evaluate == 'RANK':
-        train_data, test_data = load_data_negsampl(rt)
+        train_data, test_data = load_data_negsample(rt, dataset, ratio_train)
         train_data = MLDataSet(train_data)
         test_data = MLDataSet(test_data)
+
     return rt, train_data, test_data, userNum, itemNum
 
 
