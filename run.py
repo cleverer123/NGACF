@@ -92,7 +92,7 @@ def train(model, train_loader, optim, lossfn):
         optim.step()
         total_loss += loss.sum().item()
         if batch_id % 60 == 0 :
-            print("The time of training batch {:03d}/{}".format(batch_id, len(train_loader)) + " is: " + time.strftime("%H: %M: %S", time.gmtime(time.time())))
+            print("The timeStamp of training batch {:03d}/{}".format(batch_id, len(train_loader)) + " is: " + time.strftime("%H: %M: %S", time.gmtime(time.time())))
             
     return total_loss/len(train_loader)
 
@@ -105,24 +105,35 @@ def test(model, test_loader, lossfn):
         total_loss += loss.sum().item()
     return total_loss/len(test_loader)
 
-def eval_rank(model, test_loader, lossfn, top_k):
+def eval_rank(model, test_loader, lossfn, parallel, top_k):
     model.eval()
     HR, NDCG = [], []
-    for _, batch in enumerate(test_loader):
+    for batch_id, batch in enumerate(test_loader):
         u_idxs = batch[0].long().cuda()
         i_idxs = batch[1].long().cuda()
         predictions = model(u_idxs, i_idxs)
 
-        i_idxs = i_idxs.view(torch.cuda.device_count(), -1)
-        for device_idx, prediction in enumerate(predictions):
-            i_idx = i_idxs[device_idx, :].to(torch.device('cuda:{}'.format(device_idx)))
-            
-            _, indices = torch.topk(prediction, top_k)
-
-            recommends = torch.take(i_idx, indices).cpu().numpy().tolist()
-            gt_item = i_idx[0].item()
+        if not parallel:
+            _, indices = torch.topk(predictions, top_k)
+            recommends = torch.take(i_idxs, indices).cpu().numpy().tolist()
+            gt_item = i_idxs[0].item()
             HR.append(hit(gt_item, recommends))
             NDCG.append(ndcg(gt_item, recommends))
+        else:
+            i_idxs = i_idxs.view(torch.cuda.device_count(), -1)
+            for device_idx, prediction in enumerate(predictions):
+                i_idx = i_idxs[device_idx, :].to(torch.device('cuda:{}'.format(device_idx)))
+                print(prediction.shape)
+                _, indices = torch.topk(prediction, top_k)
+
+                recommends = torch.take(i_idx, indices).cpu().numpy().tolist()
+                gt_item = i_idx[0].item()
+                HR.append(hit(gt_item, recommends))
+                NDCG.append(ndcg(gt_item, recommends))
+        
+        if batch_id % 120 == 0 :
+            print("The timeStamp of training batch {:03d}/{}".format(batch_id, len(test_loader)) + " is: " + time.strftime("%H: %M: %S", time.gmtime(time.time())))
+           
 
     return np.mean(HR), np.mean(NDCG)
 
@@ -153,7 +164,7 @@ def main(args):
 
         if args.evaluate == 'RANK':
             start_time = time.time()
-            HR, NDCG = eval_rank(model, test_loader, lossfn, 10)
+            HR, NDCG = eval_rank(model, test_loader, lossfn, args.parallel, 10)
             summaryWriter.add_scalar('metrics/HR', HR, epoch)
             summaryWriter.add_scalar('metrics/NDCG', NDCG, epoch)
             print("The time of evaluate epoch {:03d}".format(epoch) + " is: " + time.strftime("%H: %M: %S", time.gmtime(time.time() - start_time)))
@@ -174,8 +185,8 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Neural Graph Attention Collaborative Filtering')
-    parser.add_argument("--dataset", type=str, default="ml1m", help="which dataset to use[ml100k/ml1m/Amazon])")  
-    parser.add_argument("--model", type=str, default="GACFV5", help="which model to use(NCF/GCF/GACFV1/GACFV2/GACFV3/GACFV4/GACFV5/GACFV6)")
+    parser.add_argument("--dataset", type=str, default="ml100k", help="which dataset to use[ml100k/ml1m/Amazon])")  
+    parser.add_argument("--model", type=str, default="GCF", help="which model to use(NCF/GCF/GACFV1/GACFV2/GACFV3/GACFV4/GACFV5/GACFV6)")
     parser.add_argument("--epochs", type=int, default=30, help="training epoches")
     parser.add_argument("--lr", type=float, default=0.001, help="learning rate")
     parser.add_argument("--weight_decay", type=float, default=0.0001, help="weight_decay")
@@ -186,7 +197,7 @@ if __name__ == "__main__":
     parser.add_argument("--embedSize", type=int, default=64, help="the size for Embedding layer")
     parser.add_argument("--layers", type=list, default=[64,64,], help="the layer list for propagation")
     parser.add_argument("--evaluate", type=str, default="RANK", help="the way for evaluate[MSE, RANK]")
-    parser.add_argument("--parallel", type=bool, default=True, help="whether to use parallel model")
+    parser.add_argument("--parallel", type=bool, default=False, help="whether to use parallel model")
     args = parser.parse_args()
 
     torch.manual_seed(args.seed)
