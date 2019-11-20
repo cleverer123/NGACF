@@ -123,7 +123,7 @@ def eval_rank(model, test_loader, lossfn, parallel, top_k):
             i_idxs = i_idxs.view(torch.cuda.device_count(), -1)
             for device_idx, prediction in enumerate(predictions):
                 i_idx = i_idxs[device_idx, :].to(torch.device('cuda:{}'.format(device_idx)))
-                print(prediction.shape)
+                # print(prediction.shape)
                 _, indices = torch.topk(prediction, top_k)
 
                 recommends = torch.take(i_idx, indices).cpu().numpy().tolist()
