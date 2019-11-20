@@ -82,8 +82,6 @@ def train(model, train_loader, optim, lossfn):
     model.train()
     total_loss = 0.0
     for batch_id, batch in enumerate(train_loader):
-        start_time = time.time()
-
         u_idxs = batch[0].long().cuda()
         i_idxs = batch[1].long().cuda()
         labels = batch[2].float().cuda()
@@ -93,8 +91,8 @@ def train(model, train_loader, optim, lossfn):
         loss.sum().backward()
         optim.step()
         total_loss += loss.sum().item()
-
-        print("The time of training batch {:03d}/{}".format(batch_id, len(train_loader)) + " is: " + time.strftime("%H: %M: %S", time.gmtime(time.time() - start_time)))
+        if batch_id % 60 == 0 :
+            print("The time of training batch {:03d}/{}".format(batch_id, len(train_loader)) + " is: " + time.strftime("%H: %M: %S", time.gmtime(time.time())))
             
     return total_loss/len(train_loader)
 
