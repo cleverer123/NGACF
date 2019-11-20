@@ -44,7 +44,7 @@ def loadAmazonbook():
 
 def split_data(df, dataset, ratio_train):
     if dataset == "Amazon":
-        train_len = len(df) * ratio_train
+        train_len =int(len(df) * ratio_train)
         train_df = df.iloc[:train_len, ]
         test_df = df.iloc[train_len:, ]
     else:
