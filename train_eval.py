@@ -6,6 +6,8 @@ from data.mldataset import ItemDataSet
 import multiprocessing
 import heapq
 import graphattention.metrics as metrics
+from graphattention.BPRLoss import BPRLoss
+from parallel import DataParallelCriterion2
 ############################################ Train ####################################################
 def train(model, train_loader, optim, lossfn):
     
@@ -31,9 +33,9 @@ def train(model, train_loader, optim, lossfn):
     return total_loss/len(train_loader)
 
 def train_bpr(model, train_loader, optim, lossfn, isparalell):
-    
+    lossfn = BPRLoss()
     model.train()
-    
+    lossfn = DataParallelCriterion2(lossfn)
     total_loss = 0.0
     for batch_id, (user_idxs, pos_item_idxs, neg_item_idxs) in enumerate(train_loader):
         # print(user_idxs, pos_item_idxs, neg_item_idxs)
@@ -45,8 +47,9 @@ def train_bpr(model, train_loader, optim, lossfn, isparalell):
         pos_scores = model(user_idxs, pos_item_idxs) 
         neg_scores = model(user_idxs, neg_item_idxs)
         # print(pos_scores.shape)
-        if isparalell:
-            neg_scores = torch.cat(neg_scores, dim=0)
+        if isparalell:    
+            # pos_scores = torch.cat(pos_scores, dim=0)
+            # neg_scores = torch.cat(neg_scores, dim=0)
             loss = lossfn(pos_scores, neg_scores)
         else:
             loss = lossfn(pos_scores, neg_scores)
