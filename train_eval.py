@@ -30,7 +30,7 @@ def train(model, train_loader, optim, lossfn):
             
     return total_loss/len(train_loader)
 
-def train_bpr(model, train_loader, optim, lossfn):
+def train_bpr(model, train_loader, optim, lossfn, isparalell):
     
     model.train()
     
@@ -44,7 +44,12 @@ def train_bpr(model, train_loader, optim, lossfn):
         optim.zero_grad()
         pos_scores = model(user_idxs, pos_item_idxs) 
         neg_scores = model(user_idxs, neg_item_idxs)
-        loss = lossfn(pos_scores, neg_scores)
+        # print(pos_scores.shape)
+        if isparalell:
+            neg_scores = torch.cat(neg_scores, dim=0)
+            loss = lossfn(pos_scores, neg_scores)
+        else:
+            loss = lossfn(pos_scores, neg_scores)
         loss.sum().backward()
         optim.step()
         total_loss += loss.sum().item()
