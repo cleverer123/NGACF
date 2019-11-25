@@ -30,10 +30,21 @@ def load1MRatings(datapath):
 def loadAmazonbook(datapath):
     train_df = pd.read_table(datapath + '/Amazon_train.csv',sep=',', names=['userId','itemId','rating'], dtype={'userId': np.int64, 'itemId': np.int64})
     test_df = pd.read_table(datapath + '/Amazon_test.csv',sep=',', names=['userId','itemId','rating'], dtype={'userId': np.int64, 'itemId': np.int64})
-    # train_df.dropna(inplace=True)
-    # test_df.dropna(inplace=True)
     rt = train_df.append(test_df)
     return rt, train_df, test_df
+
+def loadGowalla(datapath):
+    train_df = pd.read_table(datapath + '/g_train.csv',sep=',', names=['userId','itemId','rating'], dtype={'userId': np.int64, 'itemId': np.int64})
+    test_df = pd.read_table(datapath + '/g_test.csv',sep=',', names=['userId','itemId','rating'], dtype={'userId': np.int64, 'itemId': np.int64})
+    rt = train_df.append(test_df)
+    return rt, train_df, test_df
+
+def loadAmazon_Gowalla(dataset):
+    datapath = path.dirname(__file__) + '/' + dataset
+    if dataset == 'Amazon':
+        return loadAmazonbook(datapath)
+    if dataset == 'Gowalla':
+        return loadGowalla(datapath)
 
 def sample_train_pair(train_df):
     # train_df: ['userId', 'positive_items', 'negative_items']
@@ -53,9 +64,9 @@ def df_positive_negtive(df):
     return  df[['userId', 'positive_items', 'negative_items']], user_num
 
 def load_data(dataset, evaluate, ratio_train):
-    if dataset == 'Amazon':
-        datapath = path.dirname(__file__) + '/Amazon'
-        rt, train_df, test_df = loadAmazonbook(datapath)
+    if dataset in ['Amazon', 'Gowalla']:
+        datapath = path.dirname(__file__) + '/' + dataset
+        rt, train_df, test_df = loadAmazon_Gowalla(dataset)
         
         userNum = rt['userId'].max()
         itemNum = rt['itemId'].max()
