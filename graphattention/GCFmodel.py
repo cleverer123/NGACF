@@ -86,9 +86,73 @@ class GNNLayer(Module):
         return inter_part1+inter_part2
 
 
+class GCF_BPR(Module):
+
+    def __init__(self,userNum,itemNum,adj,embedSize=100,layers=[100,80,50],useCuda=True):
+
+        super(GCF_BPR,self).__init__()
+        self.useCuda = useCuda
+        self.userNum = userNum
+        self.itemNum = itemNum
+        self.uEmbd = nn.Embedding(userNum,embedSize)
+        self.iEmbd = nn.Embedding(itemNum,embedSize)
+        self.GNNlayers = torch.nn.ModuleList()
+        self.LaplacianMat = adj
+        self.leakyRelu = nn.LeakyReLU()
+        self.selfLoop = self.getSparseEye(self.userNum+self.itemNum)
+
+        for From,To in zip(layers[:-1],layers[1:]):
+            self.GNNlayers.append(GNNLayer(From,To))
+        
+        self._init_weight_()
+
+    def _init_weight_(self):
+        nn.init.normal_(self.uEmbd.weight, std=0.01)
+        nn.init.normal_(self.iEmbd.weight, std=0.01)
+
+    def getSparseEye(self,num):
+        i = torch.LongTensor([[k for k in range(0,num)],[j for j in range(0,num)]])
+        val = torch.FloatTensor([1]*num)
+        return torch.sparse.FloatTensor(i,val)
+
+    def getFeatureMat(self):
+        uidx = torch.LongTensor(np.arange(self.userNum))
+        iidx = torch.LongTensor(np.arange(self.itemNum))
+        if self.useCuda == True:
+            uidx = uidx.cuda()
+            iidx = iidx.cuda()
+        userEmbd = self.uEmbd(uidx)
+        itemEmbd = self.iEmbd(iidx)
+        features = torch.cat([userEmbd,itemEmbd],dim=0)
+        return features
+
+    def forward(self,userIdx,itemIdx):
+        if self.training:
+   
+            features = self.getFeatureMat()
+            finalEmbd = features.clone()
+            for gnn in self.GNNlayers:
+                features = gnn(self.LaplacianMat,self.selfLoop,features)
+                features = nn.ReLU()(features)
+                finalEmbd = torch.cat([finalEmbd,features.clone()],dim=1)
+
+            self.finalEmbd = finalEmbd
+
+            itemIdx = itemIdx + self.userNum
+            userEmbd = self.finalEmbd[userIdx]
+            itemEmbd = self.finalEmbd[itemIdx]
+        
+            prediction = torch.sum(userEmbd * itemEmbd, dim=1)
+            return prediction
+        else:
+            itemIdx = itemIdx + self.userNum
+            userEmbd = self.finalEmbd[userIdx]
+            itemEmbd = self.finalEmbd[itemIdx]
+            return torch.mm(userEmbd, itemEmbd.transpose(1, 0)) 
+
 class GCF(Module):
 
-    def __init__(self,userNum,itemNum,rt,embedSize=100,layers=[100,80,50],useCuda=True):
+    def __init__(self,userNum,itemNum,adj,embedSize=100,layers=[100,80,50],useCuda=True):
 
         super(GCF,self).__init__()
         self.useCuda = useCuda
@@ -97,7 +161,8 @@ class GCF(Module):
         self.uEmbd = nn.Embedding(userNum,embedSize)
         self.iEmbd = nn.Embedding(itemNum,embedSize)
         self.GNNlayers = torch.nn.ModuleList()
-        self.LaplacianMat = self.buildLaplacianMat(rt) # sparse format
+        # self.LaplacianMat = self.buildLaplacianMat(rt) # sparse format
+        self.LaplacianMat = adj
         self.leakyRelu = nn.LeakyReLU()
         self.selfLoop = self.getSparseEye(self.userNum+self.itemNum)
 
@@ -153,8 +218,8 @@ class GCF(Module):
         return SparseL
 
     def getFeatureMat(self):
-        uidx = torch.LongTensor([i for i in range(self.userNum)])
-        iidx = torch.LongTensor([i for i in range(self.itemNum)])
+        uidx = torch.LongTensor(np.arange(self.userNum))
+        iidx = torch.LongTensor(np.arange(self.itemNum))
         if self.useCuda == True:
             uidx = uidx.cuda()
             iidx = iidx.cuda()
@@ -165,11 +230,11 @@ class GCF(Module):
         return features
 
     def forward(self,userIdx,itemIdx):
-
-        itemIdx = itemIdx + self.userNum
-        userIdx = list(userIdx.cpu().data)
-        itemIdx = list(itemIdx.cpu().data)
-        # gcf data propagation
+        # if self.training:
+            
+            # userIdx = list(userIdx.cpu().data)
+            # itemIdx = list(itemIdx.cpu().data)
+            # gcf data propagation
         features = self.getFeatureMat()
         finalEmbd = features.clone()
         for gnn in self.GNNlayers:
@@ -177,13 +242,16 @@ class GCF(Module):
             features = nn.ReLU()(features)
             finalEmbd = torch.cat([finalEmbd,features.clone()],dim=1)
 
-        userEmbd = finalEmbd[userIdx]
-        itemEmbd = finalEmbd[itemIdx]
-        embd = torch.cat([userEmbd,itemEmbd],dim=1)
+        self.finalEmbd = finalEmbd
 
+        itemIdx = itemIdx + self.userNum
+        userEmbd = self.finalEmbd[userIdx]
+        itemEmbd = self.finalEmbd[itemIdx]
+        
+        embd = torch.cat([userEmbd,itemEmbd],dim=1)
         embd = nn.ReLU()(self.transForm1(embd))
-        embd = self.transForm2(embd)
+        embd = nn.ReLU()(self.transForm2(embd))
         embd = self.transForm3(embd)
         prediction = embd.flatten()
-
+        
         return prediction
