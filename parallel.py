@@ -162,6 +162,38 @@ class DataParallelCriterion(DataParallel):
         #return self.gather(outputs, self.output_device).mean()
         return self.gather(outputs, self.output_device)
 
+class DataParallelCriterion2(DataParallel):
+    """
+    Calculate loss in multiple-GPUs, which balance the memory usage.
+    The targets are splitted across the specified devices by chunking in
+    the batch dimension. Please use together with :class:`encoding.parallel.DataParallelModel`.
+
+    Reference:
+        Hang Zhang, Kristin Dana, Jianping Shi, Zhongyue Zhang, Xiaogang Wang, Ambrish Tyagi,
+        Amit Agrawal. “Context Encoding for Semantic Segmentation.
+        *The IEEE Conference on Computer Vision and Pattern Recognition (CVPR) 2018*
+
+    Example::
+
+        >>> net = encoding.nn.DataParallelModel(model, device_ids=[0, 1, 2])
+        >>> criterion = encoding.nn.DataParallelCriterion(criterion, device_ids=[0, 1, 2])
+        >>> y = net(x)
+        >>> loss = criterion(y, target)
+    """
+    def forward(self, inputs, targets, **kwargs):
+        # input should be already scatterd
+        # scattering the targets instead
+        # if not self.device_ids:
+        #     return self.module(inputs, *targets, **kwargs)
+        # targets, kwargs = self.scatter(targets, kwargs, self.device_ids)
+        # if len(self.device_ids) == 1:
+        #     return self.module(inputs, *targets[0], **kwargs[0])
+        replicas = self.replicate(self.module, self.device_ids[:len(inputs)])
+        outputs = _criterion_parallel_apply(replicas, inputs, targets, kwargs)
+        
+        #return Reduce.apply(*outputs) / len(outputs)
+        #return self.gather(outputs, self.output_device).mean()
+        return self.gather(outputs, self.output_device)
 
 def _criterion_parallel_apply(modules, inputs, targets, kwargs_tup=None, devices=None):
     assert len(modules) == len(inputs)
