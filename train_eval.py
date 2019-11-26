@@ -134,7 +134,7 @@ def eval_bpr(model, test_loader, test_user_num, itemNum, isparalell=False):
             # if b_idx ==0:
             #     print('item_batch_ratings', item_batch_ratings)
 
-            if isparalell:
+            if isparalell and torch.cuda.device_count()>1:
                 for x in item_batch_ratings:
                     batch_ratings.extend(x.detach().cpu().numpy())
             else:
