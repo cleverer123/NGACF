@@ -13,8 +13,8 @@ from scipy.sparse.coo import coo_matrix
 from ast import literal_eval
 from sklearn.model_selection import train_test_split
 
-from data.mldataset import MLDataSet, PairDataset, TestDataSet
-# from mldataset import MLDataSet, PairDataset, TestDataSet
+# from data.mldataset import MLDataSet, PairDataset, TestDataSet
+from mldataset import MLDataSet, PairDataset, TestDataSet
 
 # dataset:movielens100K
 def load100KRatings(datapath):
@@ -27,7 +27,7 @@ def load1MRatings(datapath):
     return rt
 
 # dataset:Amazonbook
-def loadAmazonbook(datapath):
+def loadAmazon(datapath):
     train_df = pd.read_table(datapath + '/Amazon_train.csv',sep=',', names=['userId','itemId','rating'], dtype={'userId': np.int64, 'itemId': np.int64})
     test_df = pd.read_table(datapath + '/Amazon_test.csv',sep=',', names=['userId','itemId','rating'], dtype={'userId': np.int64, 'itemId': np.int64})
     rt = train_df.append(test_df)
@@ -42,7 +42,7 @@ def loadGowalla(datapath):
 def loadAmazon_Gowalla(dataset):
     datapath = path.dirname(__file__) + '/' + dataset
     if dataset == 'Amazon':
-        return loadAmazonbook(datapath)
+        return loadAmazon(datapath)
     if dataset == 'Gowalla':
         return loadGowalla(datapath)
 
@@ -67,15 +67,10 @@ def load_data(dataset, evaluate, ratio_train):
     if dataset in ['Amazon', 'Gowalla']:
         datapath = path.dirname(__file__) + '/' + dataset
         rt, train_df, test_df = loadAmazon_Gowalla(dataset)
-        
-        userNum = rt['userId'].max()
-        itemNum = rt['itemId'].max()
+        # Amazon and Gowalla index starts at 0
+        userNum = rt['userId'].max() + 1  
+        itemNum = rt['itemId'].max() + 1
         print('userNum:{}, itemNum:{}'.format(userNum, itemNum))
-        
-        rt['userId'] = rt['userId'] - 1
-        rt['itemId'] = rt['itemId'] - 1
-        train_df['userId'] = train_df['userId'] - 1
-        train_df['itemId'] = train_df['itemId'] - 1
 
         if evaluate == 'BPR':
             train_df, train_user_num = df_positive_negtive(train_df)
@@ -297,9 +292,10 @@ def construct_data(df, negatives, n_neg):
     return np.stack([users, items, ratings], axis=1)
 
 if __name__ == "__main__":
-    # check ml100k laplacian
+    # # check ml100k laplacian
     # datapath = path.dirname(__file__) + '/1K'
     # rt = load100KRatings(datapath)
+    # check ml1m laplacian
     datapath = path.dirname(__file__) + '/1M'
     rt = load1MRatings(datapath)
     userNum = rt['userId'].max()
@@ -308,13 +304,20 @@ if __name__ == "__main__":
     rt['itemId'] = rt['itemId'] - 1
     adj, norm_adj, mean_adj = buildLaplacianMat(rt, userNum, itemNum)
 
-    dense_mean_adj = check_adj_if_equal(adj)
-    print(np.where(dense_mean_adj != mean_adj.todense()))
+    # dense_mean_adj = check_adj_if_equal(adj)
+    # print(np.where(dense_mean_adj != mean_adj.todense()))
 
     # # check ml1m laplacian
     # train_data, test_data, userNum, itemNum, adj_map = load_data('ml1m', 'MSE', 0.7)
     # mean_adj = check_adj_if_equal(adj_map['plain_adj'])
     # print(np.where(mean_adj != adj_map['mean_adj'].todense()))
+
+    # datapath = path.dirname(__file__) + '/Amazon'
+    # rt, train_df, test_df = loadAmazon(datapath)
+
+    # userNum = rt['userId'].max()
+    # itemNum = rt['itemId'].max()
+    # print('userNum:{}, itemNum:{}'.format(userNum, itemNum))
 
     # check Amazon laplacian
     # train_data, test_data, userNum, itemNum, adj_map = load_data('Amazon', 'BPR', 0.7)
