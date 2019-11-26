@@ -35,7 +35,7 @@ def train(model, train_loader, optim, lossfn):
 def train_bpr(model, train_loader, optim, lossfn, isparalell):
     lossfn = BPRLoss()
     model.train()
-    if isparalell:  
+    if isparalell and torch.cuda.device_count()>1:  
         lossfn = DataParallelCriterion2(lossfn)
     total_loss = 0.0
     for batch_id, (user_idxs, pos_item_idxs, neg_item_idxs) in enumerate(train_loader):
