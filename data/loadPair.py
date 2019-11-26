@@ -13,8 +13,7 @@ from scipy.sparse.coo import coo_matrix
 from ast import literal_eval
 from sklearn.model_selection import train_test_split
 
-# from data.mldataset import MLDataSet, PairDataset, TestDataSet
-from mldataset import MLDataSet, PairDataset, TestDataSet
+from data.mldataset import MLDataSet, PairDataset, TestDataSet
 
 # dataset:movielens100K
 def load100KRatings(datapath):
