@@ -128,7 +128,7 @@ def main(args):
 
         for epoch in range(args.epochs):
             t0 = time.time()
-            train_loss = train_bpr(model, train_loader, optim, lossfn)
+            train_loss = train_bpr(model, train_loader, optim, lossfn, args.parallel)
             summaryWriter.add_scalar('loss/train_loss', train_loss, epoch)
             print("The time elapse of epoch {:03d}".format(epoch) + " is: " + time.strftime("%H: %M: %S", time.gmtime(time.time() - t0)))
             print('------epoch:{}, train_loss:{:5f}'.format(epoch, train_loss))
