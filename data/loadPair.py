@@ -180,7 +180,7 @@ def buildLaplacianMat(rt, userNum, itemNum):
         d_inv_sqrt = np.array(d_inv_sqrt.todense()).reshape(-1)
         D = sparse.diags(d_inv_sqrt)
         L = D.dot(adj).dot(D) # csr_matrix (size, size)
-        return L
+        return L.tocoo()
     # A' = (D + I)^-1/2  ( A + I )  (D + I)^-1/2
     norm_adj = normalize_adj(adj + selfLoop)
     # A'' = D^-1/2 A D^-1/2
