@@ -35,7 +35,8 @@ def train(model, train_loader, optim, lossfn):
 def train_bpr(model, train_loader, optim, lossfn, isparalell):
     lossfn = BPRLoss()
     model.train()
-    lossfn = DataParallelCriterion2(lossfn)
+    if isparalell:  
+        lossfn = DataParallelCriterion2(lossfn)
     total_loss = 0.0
     for batch_id, (user_idxs, pos_item_idxs, neg_item_idxs) in enumerate(train_loader):
         # print(user_idxs, pos_item_idxs, neg_item_idxs)
@@ -46,14 +47,11 @@ def train_bpr(model, train_loader, optim, lossfn, isparalell):
         optim.zero_grad()
         pos_scores = model(user_idxs, pos_item_idxs) 
         neg_scores = model(user_idxs, neg_item_idxs)
-        # print(pos_scores.shape)
-        if isparalell:    
-            # pos_scores = torch.cat(pos_scores, dim=0)
-            # neg_scores = torch.cat(neg_scores, dim=0)
-            loss = lossfn(pos_scores, neg_scores)
-        else:
-            loss = lossfn(pos_scores, neg_scores)
-        loss.sum().backward()
+        
+        loss = lossfn(pos_scores, neg_scores)
+        
+        # Ref: https://discuss.pytorch.org/t/is-the-loss-function-paralleled-when-using-dataparallel/3346/5
+        loss.backward(torch.ones(torch.cuda.device_count()).cuda())
         optim.step()
         total_loss += loss.sum().item()
         if batch_id % 60 == 0 :
@@ -137,7 +135,8 @@ def eval_bpr(model, test_loader, test_user_num, itemNum, isparalell=False):
             #     print('item_batch_ratings', item_batch_ratings)
 
             if isparalell:
-                batch_ratings.extend(item_batch_ratings.detach().cpu().numpy())
+                for x in item_batch_ratings:
+                    batch_ratings.extend(x.detach().cpu().numpy())
             else:
                 batch_ratings.extend(item_batch_ratings.detach().cpu().numpy())
 
