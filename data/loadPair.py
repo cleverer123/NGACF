@@ -149,9 +149,9 @@ def get_adj_mat(path, rt, userNum, itemNum):
         sp.save_npz(path + '/s_adj_mat.npz', adj_mat)
         sp.save_npz(path + '/s_norm_adj_mat.npz', norm_adj_mat)
         sp.save_npz(path + '/s_mean_adj_mat.npz', mean_adj_mat)
-    adj_map['plain_adj'] = adj_mat
-    adj_map['norm_adj'] = norm_adj_mat
-    adj_map['mean_adj'] = mean_adj_mat
+    # adj_map['plain_adj'] = adj_mat
+    # adj_map['norm_adj'] = norm_adj_mat
+    # adj_map['mean_adj'] = mean_adj_mat
     adj_map['plain_adj'] = scipySP_torchSP(adj_mat)
     adj_map['norm_adj'] = scipySP_torchSP(norm_adj_mat)
     adj_map['mean_adj'] = scipySP_torchSP(mean_adj_mat)
@@ -167,7 +167,7 @@ def buildLaplacianMat(rt, userNum, itemNum):
     uiMat = uiMat.transpose()
     uiMat.resize((itemNum, userNum + itemNum))
 
-    adj = sparse.vstack([uiMat_upperPart,uiMat])
+    adj = sparse.vstack([uiMat_upperPart,uiMat]).tocsr()
 
     selfLoop = sparse.eye(userNum + itemNum)
     # def normalize_adj(adj):
@@ -181,13 +181,11 @@ def buildLaplacianMat(rt, userNum, itemNum):
     #     return L
 
     def normalize_adj(adj):
-        degree = adj.sum(axis=1)
-        degree = np.array(degree).reshape(-1)
-        d_inv_sqrt = np.power(degree,-0.5)
-        d_inv_sqrt[np.isinf(d_inv_sqrt)] = 0.
-        D = sp.diags(d_inv_sqrt)
-        L = D.dot(adj).dot(D)
-        L = sparse.coo_matrix(L)
+        degree = sparse.csr_matrix(adj.sum(axis=1))
+        d_inv_sqrt = degree.power(-0.5) # csr_matrix (size ,1) 
+        d_inv_sqrt = np.array(d_inv_sqrt.todense()).reshape(-1)
+        D = sparse.diags(d_inv_sqrt)
+        L = D.dot(adj).dot(D) # csr_matrix (size, size)
         return L
     # A' = (D + I)^-1/2  ( A + I )  (D + I)^-1/2
     norm_adj = normalize_adj(adj + selfLoop)
@@ -211,9 +209,6 @@ def scipySP_torchSP(L):
     idx = torch.LongTensor([L.row, L.col])
     data = torch.FloatTensor(L.data)
     return torch.sparse.FloatTensor(idx, data)
-
-
-
 
 
         
@@ -302,10 +297,19 @@ def construct_data(df, negatives, n_neg):
     return np.stack([users, items, ratings], axis=1)
 
 if __name__ == "__main__":
-    # # check ml100k laplacian
-    # train_data, test_data, userNum, itemNum, adj_map = load_data('ml100k', 'RANK', 0.7)
-    # mean_adj = check_adj_if_equal(adj_map['plain_adj'])
-    # print(np.where(mean_adj != adj_map['mean_adj'].todense()))
+    # check ml100k laplacian
+    # datapath = path.dirname(__file__) + '/1K'
+    # rt = load100KRatings(datapath)
+    datapath = path.dirname(__file__) + '/1M'
+    rt = load1MRatings(datapath)
+    userNum = rt['userId'].max()
+    itemNum = rt['itemId'].max()
+    rt['userId'] = rt['userId'] - 1
+    rt['itemId'] = rt['itemId'] - 1
+    adj, norm_adj, mean_adj = buildLaplacianMat(rt, userNum, itemNum)
+
+    dense_mean_adj = check_adj_if_equal(adj)
+    print(np.where(dense_mean_adj != mean_adj.todense()))
 
     # # check ml1m laplacian
     # train_data, test_data, userNum, itemNum, adj_map = load_data('ml1m', 'MSE', 0.7)
@@ -313,6 +317,6 @@ if __name__ == "__main__":
     # print(np.where(mean_adj != adj_map['mean_adj'].todense()))
 
     # check Amazon laplacian
-    train_data, test_data, userNum, itemNum, adj_map = load_data('Amazon', 'BPR', 0.7)
-    mean_adj = check_adj_if_equal(adj_map['plain_adj'])
-    print(np.where(mean_adj != adj_map['mean_adj'].todense()))
+    # train_data, test_data, userNum, itemNum, adj_map = load_data('Amazon', 'BPR', 0.7)
+    # mean_adj = check_adj_if_equal(adj_map['plain_adj'])
+    # print(np.where(mean_adj != adj_map['mean_adj'].todense()))
