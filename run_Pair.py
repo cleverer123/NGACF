@@ -1,3 +1,4 @@
+import os
 import time
 import argparse 
 import torch
@@ -195,6 +196,7 @@ if __name__ == "__main__":
     parser.add_argument("--parallel", type=bool, default=True, help="whether to use parallel model")
     args = parser.parse_args()
 
+    os.environ["CUDA_VISIBLE_DEVICES"] = '1,2' 
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
     main(args)
