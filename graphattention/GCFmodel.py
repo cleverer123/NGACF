@@ -127,27 +127,21 @@ class GCF_BPR(Module):
         return features
 
     def forward(self,userIdx,itemIdx):
+        features = self.getFeatureMat()
+        finalEmbd = features.clone()
+        for gnn in self.GNNlayers:
+            features = gnn(self.LaplacianMat,self.selfLoop,features)
+            features = nn.ReLU()(features)
+            finalEmbd = torch.cat([finalEmbd,features.clone()],dim=1)
+
+        self.finalEmbd = finalEmbd
+
+        itemIdx = itemIdx + self.userNum
+        userEmbd = self.finalEmbd[userIdx]
+        itemEmbd = self.finalEmbd[itemIdx]
         if self.training:
-   
-            features = self.getFeatureMat()
-            finalEmbd = features.clone()
-            for gnn in self.GNNlayers:
-                features = gnn(self.LaplacianMat,self.selfLoop,features)
-                features = nn.ReLU()(features)
-                finalEmbd = torch.cat([finalEmbd,features.clone()],dim=1)
-
-            self.finalEmbd = finalEmbd
-
-            itemIdx = itemIdx + self.userNum
-            userEmbd = self.finalEmbd[userIdx]
-            itemEmbd = self.finalEmbd[itemIdx]
-        
-            prediction = torch.sum(userEmbd * itemEmbd, dim=1)
-            return prediction
+            return torch.sum(userEmbd * itemEmbd, dim=1)
         else:
-            itemIdx = itemIdx + self.userNum
-            userEmbd = self.finalEmbd[userIdx]
-            itemEmbd = self.finalEmbd[itemIdx]
             return torch.mm(userEmbd, itemEmbd.transpose(1, 0)) 
 
 class GCF(Module):
