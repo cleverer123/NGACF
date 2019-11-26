@@ -161,7 +161,7 @@ def buildLaplacianMat(rt, userNum, itemNum):
     uiMat = uiMat.transpose()
     uiMat.resize((itemNum, userNum + itemNum))
 
-    adj = sparse.vstack([uiMat_upperPart,uiMat]).tocsr()
+    adj = sparse.vstack([uiMat_upperPart,uiMat])
 
     selfLoop = sparse.eye(userNum + itemNum)
     # def normalize_adj(adj):
@@ -175,12 +175,13 @@ def buildLaplacianMat(rt, userNum, itemNum):
     #     return L
 
     def normalize_adj(adj):
+        adj = adj.tocsr()
         degree = sparse.csr_matrix(adj.sum(axis=1))
         d_inv_sqrt = degree.power(-0.5) # csr_matrix (size ,1) 
         d_inv_sqrt = np.array(d_inv_sqrt.todense()).reshape(-1)
         D = sparse.diags(d_inv_sqrt)
         L = D.dot(adj).dot(D) # csr_matrix (size, size)
-        return L.tocoo()
+        return sparse.coo_matrix(L)
     # A' = (D + I)^-1/2  ( A + I )  (D + I)^-1/2
     norm_adj = normalize_adj(adj + selfLoop)
     # A'' = D^-1/2 A D^-1/2
@@ -203,7 +204,6 @@ def scipySP_torchSP(L):
     idx = torch.LongTensor([L.row, L.col])
     data = torch.FloatTensor(L.data)
     return torch.sparse.FloatTensor(idx, data)
-
 
         
 def split_data(df, dataset, ratio_train):
