@@ -70,24 +70,28 @@ def load_data(dataset, evaluate, ratio_train, adj_type):
     if dataset in ['Amazon', 'Gowalla']:
         datapath = path.dirname(__file__) + '/' + dataset
         rt, train_df, test_df = loadAmazon_Gowalla(dataset)
+
         item_pool = set(rt['itemId'].unique()) 
+        
         # Amazon and Gowalla index starts at 0
         userNum = rt['userId'].max() + 1  
         itemNum = rt['itemId'].max() + 1
         print('userNum:{}, itemNum:{}'.format(userNum, itemNum))
         if evaluate == 'BPR' :
             t0 = time.time()
+            # Generate Train_data
             train_df = train_positives_negtives(item_pool, train_df)
             train_data = sample_train_pair(train_df)
             train_data = PairDataset(train_data.values)
 
-            # TODO: Generate Test_data
+            # Generate Test_data
             test_df, test_user_num = test_positives_negtives(train_df, test_df)
             test_data = TestDataSet(test_df)
-            print('number of trains:{}, number of tests:{}'.format(len(train_df), len(test_df)))
+            
             print('Time consuming of generating train_test data:', time.time() - t0)
             print('test_user_num:{}'.format(test_user_num))
-            
+            print('number of trains:{}'.format(len(train_df)))
+
         elif evaluate == 'RANK':
             train_data, test_data = load_data_negsample(rt, dataset, ratio_train)
             train_data = MLDataSet(train_data)
@@ -126,11 +130,11 @@ def load_data(dataset, evaluate, ratio_train, adj_type):
             
             train_df, test_df = train_test_split(rt, test_size=1-ratio_train)
             item_pool = set(rt['itemId'].unique()) 
-            # Generate train_data
+            # Generate Train_data
             train_df = train_positives_negtives(item_pool, train_df)
             train_data = sample_train_pair(train_df)
             train_data = PairDataset(train_data.values)
-            # Generate test_data
+            # Generate Test_data
             test_df, test_user_num = test_positives_negtives(train_df, test_df)
             test_data = TestDataSet(test_df.values)
             print('test_user_num:{}'.format(test_user_num))
@@ -174,9 +178,10 @@ def buildLaplacianMat(rt, userNum, itemNum, adj_type):
         D = sparse.diags(d_inv_sqrt)
         L = D.dot(adj).dot(D) # csr_matrix (size, size)
         return sparse.coo_matrix(L)
-    # A' = (D + I)^-1/2  ( A + I )  (D + I)^-1/2
+    
     if adj_type == 'plain_adj':
         return adj
+    # A' = (D + I)^-1/2  ( A + I )  (D + I)^-1/2
     elif adj_type == 'norm_adj':
         return normalize_adj(adj + selfLoop)
     # A'' = D^-1/2 A D^-1/2
@@ -185,16 +190,17 @@ def buildLaplacianMat(rt, userNum, itemNum, adj_type):
 
 def get_adj_mat(path, rt, userNum, itemNum, adj_type):
     try:
-        t0 = time.time()
         if adj_type == 'plain_adj':
             adj = sp.load_npz(path + '/s_adj_mat.npz')
         elif adj_type == 'norm_adj':
             adj = sp.load_npz(path + '/s_norm_adj_mat.npz')
         elif adj_type == 'mean_adj':
             adj = sp.load_npz(path + '/s_mean_adj_mat.npz')
-        print('already load adj matrix', adj.shape, time.time() - t0)
+        print('Load adj matrix', adj.shape)
     except Exception:
+        t0 = time.time()
         adj = buildLaplacianMat(rt, userNum, itemNum, adj_type)
+        print('Time consuming for building adj matrix', adj.shape, time.time() - t0)
         if adj_type == 'plain_adj':
             sp.save_npz(path + '/s_adj_mat.npz', adj)
         elif adj_type == 'norm_adj':

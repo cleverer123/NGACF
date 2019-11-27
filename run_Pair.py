@@ -120,10 +120,12 @@ def main(args):
         if args.parallel == True :
             device_count = torch.cuda.device_count()
             train_loader = DataLoader(train_data, batch_size=args.batch_size * device_count, shuffle=True,pin_memory=True)
+            test_loader = DataLoader(test_data, batch_size=32 * device_count, shuffle=False, pin_memory=False)
         else:
             train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=True,pin_memory=True)
+            test_loader = DataLoader(test_data, batch_size=32 , shuffle=False, pin_memory=False)
         
-        test_loader = DataLoader(test_data, batch_size=32, shuffle=False, pin_memory=False)
+        
 
         model, lossfn, optim = createModels(args, userNum, itemNum, adj)
 
