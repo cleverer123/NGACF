@@ -120,9 +120,9 @@ def eval_bpr(model, test_loader, test_user_num, itemNum, isparalell=False):
 
     if isparalell:
         device_count = torch.cuda.device_count()
-        item_loader = DataLoader(ItemDataSet(np.arange(itemNum)), batch_size=item_batch_size * device_count, shuffle=False, pin_memory=True)
+        item_loader = DataLoader(ItemDataSet(np.arange(itemNum)), batch_size=item_batch_size * device_count, shuffle=False, pin_memory=False)
     else:
-        item_loader = DataLoader(ItemDataSet(np.arange(itemNum)), batch_size=item_batch_size, shuffle=False, pin_memory=True)
+        item_loader = DataLoader(ItemDataSet(np.arange(itemNum)), batch_size=item_batch_size, shuffle=False, pin_memory=False)
     
     for _, (user_batch, positive_items, negative_items) in enumerate(test_loader):
 
@@ -140,8 +140,8 @@ def eval_bpr(model, test_loader, test_user_num, itemNum, isparalell=False):
             else:
                 batch_ratings.extend(item_batch_ratings.detach().cpu().numpy())
 
-        batch_ratings = np.array(batch_ratings) # (batch_size, Item_num)
-        # print('batch_ratings', batch_ratings.shape)
+        batch_ratings = np.array(batch_ratings) # (user_batch_size, Item_num)
+        print('batch_ratings', batch_ratings.shape)
         user_batch_ratings = zip(batch_ratings, positive_items, negative_items)
         batch_metrics = pool.map(report_one_user, user_batch_ratings)
 

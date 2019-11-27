@@ -45,44 +45,53 @@ def loadAmazon_Gowalla(dataset):
     if dataset == 'Gowalla':
         return loadGowalla(datapath)
 
+# 构建正负样本集合：userId：int; positive_items：set; negative_items: set.
+# 负样本集合为所有未在训练集中出现过的item.
+def train_positives_negtives(item_pool, train_df):
+    train_df = train_df.groupby('userId')['itemId'].apply(set).reset_index().rename(columns={'itemId': 'positive_items'})
+    train_df['negative_items'] = train_df['positive_items'].apply(lambda x: item_pool - x)
+    return train_df[['userId', 'positive_items', 'negative_items']]
+
 def sample_train_pair(train_df):
     # train_df: ['userId', 'positive_items', 'negative_items']
     sampled_batch = train_df.sample(n=len(train_df))
     # sample pairs
     sampled_batch['pos_sample'] = sampled_batch['positive_items'].apply(lambda x: random.sample(x, 1))
     sampled_batch['neg_sample'] = sampled_batch['negative_items'].apply(lambda x: random.sample(x, 1))
-
     return sampled_batch[['userId', 'pos_sample', 'neg_sample']]
 
-# 构建正负样本集合：userId：int; positive_items：set; negative_items: set.
-def df_positive_negtive(df):
-    user_num = len(df['userId'].unique())
-    item_pool = set(df['itemId'].unique())  # item_pool: 1682
-    df = df.groupby('userId')['itemId'].apply(set).reset_index().rename(columns={'itemId': 'positive_items'})
-    df['negative_items'] = df['positive_items'].apply(lambda x: item_pool - x)
-    return  df[['userId', 'positive_items', 'negative_items']], user_num
+def test_positives_negtives(train_df, test_df):
+    test_df = test_df.groupby('userId')['itemId'].apply(set).reset_index().rename(columns={'itemId': 'positive_items'})
+    test_df = pd.merge(test_df, train_df[['userId', 'negative_items']], on='userId')
+    test_user_num = len(test_df['userId'].unique())
+    return test_df[['userId', 'positive_items', 'negative_items']], test_user_num
 
-def load_data(dataset, evaluate, ratio_train):
+def load_data(dataset, evaluate, ratio_train, adj_type):
     if dataset in ['Amazon', 'Gowalla']:
         datapath = path.dirname(__file__) + '/' + dataset
         rt, train_df, test_df = loadAmazon_Gowalla(dataset)
+        item_pool = set(rt['itemId'].unique()) 
         # Amazon and Gowalla index starts at 0
         userNum = rt['userId'].max() + 1  
         itemNum = rt['itemId'].max() + 1
         print('userNum:{}, itemNum:{}'.format(userNum, itemNum))
-
-        if evaluate == 'BPR':
-            train_df, train_user_num = df_positive_negtive(train_df)
+        if evaluate == 'BPR' :
+            t0 = time.time()
+            train_df = train_positives_negtives(item_pool, train_df)
             train_data = sample_train_pair(train_df)
             train_data = PairDataset(train_data.values)
 
             # TODO: Generate Test_data
-            test_df, test_user_num = df_positive_negtive(test_df)
+            test_df, test_user_num = test_positives_negtives(train_df, test_df)
             test_data = TestDataSet(test_df)
-            print('train_user_num:{}, test_user_num:{}'.format(train_user_num, test_user_num))
+            print('number of trains:{}, number of tests:{}'.format(len(train_df), len(test_df)))
+            print('Time consuming of generating train_test data:', time.time() - t0)
+            print('test_user_num:{}'.format(test_user_num))
             
-        else:
-            print('Amazon dataset is too large to process with evaluate'.format(evaluate))
+        elif evaluate == 'RANK':
+            train_data, test_data = load_data_negsample(rt, dataset, ratio_train)
+            train_data = MLDataSet(train_data)
+            test_data = MLDataSet(test_data)
 
     else:
         if dataset == 'ml1m':
@@ -116,43 +125,26 @@ def load_data(dataset, evaluate, ratio_train):
         elif evaluate == 'BPR':
             
             train_df, test_df = train_test_split(rt, test_size=1-ratio_train)
+            item_pool = set(rt['itemId'].unique()) 
             # Generate train_data
-            train_df, train_user_num = df_positive_negtive(train_df)
+            train_df = train_positives_negtives(item_pool, train_df)
             train_data = sample_train_pair(train_df)
             train_data = PairDataset(train_data.values)
             # Generate test_data
-            test_df, test_user_num = df_positive_negtive(test_df)
+            test_df, test_user_num = test_positives_negtives(train_df, test_df)
             test_data = TestDataSet(test_df.values)
-            print('train_user_num:{}, test_user_num:{}'.format(train_user_num, test_user_num))
+            print('test_user_num:{}'.format(test_user_num))
     
-    adj_map = get_adj_mat(datapath, rt, userNum, itemNum)
+    adj = get_adj_mat(datapath, rt, userNum, itemNum, adj_type)
 
-    return train_data, test_data, userNum, itemNum, adj_map, train_user_num, test_user_num
+    return train_data, test_data, userNum, itemNum, adj, test_user_num
 
+def scipySP_torchSP(L):
+    idx = torch.LongTensor([L.row, L.col])
+    data = torch.FloatTensor(L.data)
+    return torch.sparse.FloatTensor(idx, data)
 
-def get_adj_mat(path, rt, userNum, itemNum):
-    adj_map = {}
-    try:
-        t0 = time.time()
-        adj_mat = sp.load_npz(path + '/s_adj_mat.npz')
-        norm_adj_mat = sp.load_npz(path + '/s_norm_adj_mat.npz')
-        mean_adj_mat = sp.load_npz(path + '/s_mean_adj_mat.npz')
-        print('already load adj matrix', adj_mat.shape, time.time() - t0)
-    except Exception:
-        adj_mat, norm_adj_mat, mean_adj_mat = buildLaplacianMat(rt, userNum, itemNum)
-        sp.save_npz(path + '/s_adj_mat.npz', adj_mat)
-        sp.save_npz(path + '/s_norm_adj_mat.npz', norm_adj_mat)
-        sp.save_npz(path + '/s_mean_adj_mat.npz', mean_adj_mat)
-    # adj_map['plain_adj'] = adj_mat
-    # adj_map['norm_adj'] = norm_adj_mat
-    # adj_map['mean_adj'] = mean_adj_mat
-    adj_map['plain_adj'] = scipySP_torchSP(adj_mat)
-    adj_map['norm_adj'] = scipySP_torchSP(norm_adj_mat)
-    adj_map['mean_adj'] = scipySP_torchSP(mean_adj_mat)
-    return adj_map
-
-def buildLaplacianMat(rt, userNum, itemNum):
-
+def buildLaplacianMat(rt, userNum, itemNum, adj_type):
     rt_item = rt['itemId'] + userNum
     uiMat = coo_matrix((rt['rating'], (rt['userId'], rt['itemId'])))
     # print('uiMat shape', uiMat.shape)
@@ -183,28 +175,43 @@ def buildLaplacianMat(rt, userNum, itemNum):
         L = D.dot(adj).dot(D) # csr_matrix (size, size)
         return sparse.coo_matrix(L)
     # A' = (D + I)^-1/2  ( A + I )  (D + I)^-1/2
-    norm_adj = normalize_adj(adj + selfLoop)
+    if adj_type == 'plain_adj':
+        return adj
+    elif adj_type == 'norm_adj':
+        return normalize_adj(adj + selfLoop)
     # A'' = D^-1/2 A D^-1/2
-    mean_adj = normalize_adj(adj)
-    return adj, norm_adj, mean_adj
+    elif adj_type == 'mean_adj':
+        return normalize_adj(adj)
 
+def get_adj_mat(path, rt, userNum, itemNum, adj_type):
+    try:
+        t0 = time.time()
+        if adj_type == 'plain_adj':
+            adj = sp.load_npz(path + '/s_adj_mat.npz')
+        elif adj_type == 'norm_adj':
+            adj = sp.load_npz(path + '/s_norm_adj_mat.npz')
+        elif adj_type == 'mean_adj':
+            adj = sp.load_npz(path + '/s_mean_adj_mat.npz')
+        print('already load adj matrix', adj.shape, time.time() - t0)
+    except Exception:
+        adj = buildLaplacianMat(rt, userNum, itemNum, adj_type)
+        if adj_type == 'plain_adj':
+            sp.save_npz(path + '/s_adj_mat.npz', adj)
+        elif adj_type == 'norm_adj':
+            sp.save_npz(path + '/s_norm_adj_mat.npz', adj)
+        elif adj_type == 'mean_adj':  
+            sp.save_npz(path + '/s_mean_adj_mat.npz', adj)
+    return scipySP_torchSP(adj)
 
+# temp = np.dot(np.diag(np.power(degree, -1)), dense_A)
 def check_adj_if_equal(adj):
     A = np.array(adj.todense())
     degree = np.sum(A, axis=1, keepdims=False)
     d_inv_sqrt = np.power(degree, -0.5).flatten()
     d_inv_sqrt[np.isinf(d_inv_sqrt)] = 0.
     D = np.diag(d_inv_sqrt)
-    temp = D.dot(A).dot(D)
-    # temp = np.dot(np.diag(np.power(degree, -1)), dense_A)
     print('check normalized adjacency matrix whether equal to this laplacian matrix.')
-    return temp
-
-def scipySP_torchSP(L):
-    idx = torch.LongTensor([L.row, L.col])
-    data = torch.FloatTensor(L.data)
-    return torch.sparse.FloatTensor(idx, data)
-
+    return D.dot(A).dot(D)
         
 def split_data(df, dataset, ratio_train):
     if dataset == "Amazon":

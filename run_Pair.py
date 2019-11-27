@@ -39,19 +39,19 @@ CUDA_LAUNCH_BLOCKING=1
 #     return - torch.log(torch.sigmoid(a - b)).mean()
 
 def prepareData(args):
-    train_data, test_data, userNum, itemNum, adj_map, train_user_num, test_user_num = load_data(args.dataset, args.evaluate, args.train)
+    train_data, test_data, userNum, itemNum, adj, test_user_num = load_data(args.dataset, args.evaluate, args.train, args.adj_type)
     
     
     test_batch_size = len(test_data) if 'MSE' == args.evaluate else 100
     if args.parallel == True :
         device_count = torch.cuda.device_count()
         train_loader = DataLoader(train_data, batch_size=args.batch_size * device_count, shuffle=True,pin_memory=True)
-        test_loader = DataLoader(test_data, batch_size=test_batch_size * device_count, shuffle=False, pin_memory=True)
+        test_loader = DataLoader(test_data, batch_size=test_batch_size * device_count, shuffle=False, pin_memory=False)
     else:
         train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=True,pin_memory=True)
-        test_loader = DataLoader(test_data, batch_size=test_batch_size, shuffle=False, pin_memory=True)
+        test_loader = DataLoader(test_data, batch_size=test_batch_size, shuffle=False, pin_memory=False)
     
-    return train_loader, test_loader, userNum, itemNum, adj_map
+    return train_loader, test_loader, userNum, itemNum, adj
 
     
     
@@ -116,16 +116,16 @@ def main(args):
                     args.weight_decay, args.droprate, args.seed))
 
     if args.evaluate == 'BPR':
-        train_data, test_data, userNum, itemNum, adj_map, train_user_num, test_user_num = load_data(args.dataset, args.evaluate, args.train)
+        train_data, test_data, userNum, itemNum, adj, test_user_num = load_data(args.dataset, args.evaluate, args.train, args.adj_type)
         if args.parallel == True :
             device_count = torch.cuda.device_count()
             train_loader = DataLoader(train_data, batch_size=args.batch_size * device_count, shuffle=True,pin_memory=True)
         else:
             train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=True,pin_memory=True)
         
-        test_loader = DataLoader(test_data, batch_size=args.batch_size, shuffle=False, pin_memory=True)
+        test_loader = DataLoader(test_data, batch_size=32, shuffle=False, pin_memory=False)
 
-        model, lossfn, optim = createModels(args, userNum, itemNum, adj_map[args.adj_type])
+        model, lossfn, optim = createModels(args, userNum, itemNum, adj)
 
         for epoch in range(args.epochs):
             t0 = time.time()
@@ -143,8 +143,8 @@ def main(args):
                     summaryWriter.add_scalar('metrics@{}/auc'.format(K), metrics['auc'], epoch)
                 
     else:
-        train_loader, test_loader, userNum, itemNum, adj_map = prepareData(args)
-        model, lossfn, optim = createModels(args, userNum, itemNum, adj_map[args.adj_type])
+        train_loader, test_loader, userNum, itemNum, adj = prepareData(args)
+        model, lossfn, optim = createModels(args, userNum, itemNum, adj)
 
         for epoch in range(args.epochs):
             start_time = time.time()
@@ -179,11 +179,11 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Neural Graph Attention Collaborative Filtering')
-    parser.add_argument("--dataset", type=str, default="ml100k", help="which dataset to use[ml100k/ml1m/Amazon])")  
+    parser.add_argument("--dataset", type=str, default="Gowalla", help="which dataset to use[ml100k/ml1m/Amazon])")  
     parser.add_argument("--model", type=str, default="GCF", help="which model to use(NCF/GCF/GACFV1/GACFV2/GACFV3/GACFV4/GACFV5/GACFV6)")
     parser.add_argument("--adj_type", type=str, default="mean_adj", help="which adj matrix to use [plain_adj, norm_adj, mean_adj]")
-    parser.add_argument("--epochs", type=int, default=60, help="training epoches")
-    parser.add_argument("--eval_every", type=int, default=10, help="evaluate every")
+    parser.add_argument("--epochs", type=int, default=300, help="training epoches")
+    parser.add_argument("--eval_every", type=int, default=50, help="evaluate every")
     parser.add_argument("--lr", type=float, default=0.001, help="learning rate")
     parser.add_argument("--weight_decay", type=float, default=0.0001, help="weight_decay")
     parser.add_argument("--batch_size", type=int, default=2048, help="input batch size for training")
@@ -191,12 +191,12 @@ if __name__ == "__main__":
     parser.add_argument("--train", type=float, default=0.7, help="the train rate of dataset")
     parser.add_argument("--seed", type=int, default=2019, help="the seed for random")
     parser.add_argument("--embedSize", type=int, default=64, help="the size for Embedding layer")
-    parser.add_argument("--layers", type=list, default=[64,64,64], help="the layer list for propagation")
+    parser.add_argument("--layers", type=list, default=[64,64], help="the layer list for propagation")
     parser.add_argument("--evaluate", type=str, default="BPR", help="the way for evaluate[MSE, RANK, BPR]")
     parser.add_argument("--parallel", type=bool, default=True, help="whether to use parallel model")
     args = parser.parse_args()
-
-    os.environ["CUDA_VISIBLE_DEVICES"] = '1,2' 
+    if args.parallel:
+        os.environ["CUDA_VISIBLE_DEVICES"] = '1, 2' 
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
     main(args)
