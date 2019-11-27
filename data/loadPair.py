@@ -55,6 +55,7 @@ def train_positives_negtives(item_pool, train_df):
 def sample_train_pair(train_df):
     # train_df: ['userId', 'positive_items', 'negative_items']
     sampled_batch = train_df.sample(n=len(train_df))
+    # sampled_batch = train_df
     # sample pairs
     sampled_batch['pos_sample'] = sampled_batch['positive_items'].apply(lambda x: random.sample(x, 1))
     sampled_batch['neg_sample'] = sampled_batch['negative_items'].apply(lambda x: random.sample(x, 1))
@@ -86,7 +87,7 @@ def load_data(dataset, evaluate, ratio_train, adj_type):
 
             # Generate Test_data
             test_df, test_user_num = test_positives_negtives(train_df, test_df)
-            test_data = TestDataSet(test_df)
+            test_data = TestDataSet(test_df.values)
             
             print('Time consuming of generating train_test data:', time.time() - t0)
             print('test_user_num:{}'.format(test_user_num))
@@ -304,17 +305,26 @@ def construct_data(df, negatives, n_neg):
     return np.stack([users, items, ratings], axis=1)
 
 if __name__ == "__main__":
+    pass
+    # datapath = path.dirname(__file__) + '/Gowalla'
+    # rt, train_df, test_df = loadGowalla(datapath)
+    # item_pool = set(rt['itemId'].unique()) 
+    # train_df = train_positives_negtives(item_pool, train_df)
+    # test_df, test_user_num = test_positives_negtives(train_df, test_df)
+    # print(test_df.iloc[0])
+
     # # check ml100k laplacian
     # datapath = path.dirname(__file__) + '/1K'
     # rt = load100KRatings(datapath)
+    
     # check ml1m laplacian
-    datapath = path.dirname(__file__) + '/1M'
-    rt = load1MRatings(datapath)
-    userNum = rt['userId'].max()
-    itemNum = rt['itemId'].max()
-    rt['userId'] = rt['userId'] - 1
-    rt['itemId'] = rt['itemId'] - 1
-    adj, norm_adj, mean_adj = buildLaplacianMat(rt, userNum, itemNum)
+    # datapath = path.dirname(__file__) + '/1M'
+    # rt = load1MRatings(datapath)
+    # userNum = rt['userId'].max()
+    # itemNum = rt['itemId'].max()
+    # rt['userId'] = rt['userId'] - 1
+    # rt['itemId'] = rt['itemId'] - 1
+    # adj, norm_adj, mean_adj = buildLaplacianMat(rt, userNum, itemNum)
 
     # dense_mean_adj = check_adj_if_equal(adj)
     # print(np.where(dense_mean_adj != mean_adj.todense()))
