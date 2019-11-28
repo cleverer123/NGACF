@@ -45,6 +45,14 @@ def loadAmazon_Gowalla(dataset):
     if dataset == 'Gowalla':
         return loadGowalla(datapath)
 
+# 新的ml1m的读取函数
+def loadML1m():
+    datapath = path.dirname(__file__) + '/1M' 
+    train_df = pd.read_table(datapath + '/ml1m_train.csv',sep=',', names=['userId','itemId','rating','timestamp'], dtype={'userId': np.int64, 'itemId': np.int64})
+    test_df = pd.read_table(datapath + '/ml1m_test.csv',sep=',', names=['userId','itemId','rating','timestamp'], dtype={'userId': np.int64, 'itemId': np.int64})
+    # rt = train_df.append(test_df)
+    return train_df[['userId','itemId','rating']], test_df[['userId','itemId','rating']]
+
 # 构建正负样本集合：userId：int; positive_items：set; negative_items: set.
 # 负样本集合为所有未在训练集中出现过的item.
 def train_positives_negtives(item_pool, train_df):
@@ -129,7 +137,10 @@ def load_data(dataset, evaluate, ratio_train, adj_type):
 
         elif evaluate == 'BPR':
             
-            train_df, test_df = train_test_split(rt, test_size=1-ratio_train)
+            # 如果是BPR模式，读取ml1m的数据的话，也是按照train、test分开读取的方式
+            # train_df, test_df = train_test_split(rt, test_size=1-ratio_train)
+            train_df, test_df = loadML1m()
+            print(train_df.values[:10,])
             item_pool = set(rt['itemId'].unique()) 
             # Generate Train_data
             train_df = train_positives_negtives(item_pool, train_df)
