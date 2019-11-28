@@ -132,17 +132,15 @@ def eval_bpr(model, test_loader, test_user_num, itemNum, isparalell):
         for _, item_batch in enumerate(item_loader):
             i_idxs = item_batch.long().cuda()
             item_batch_ratings = model(u_idxs, i_idxs)
-            # if b_idx ==0:
-            #     print('item_batch_ratings', item_batch_ratings)
-            # print(item_batch_ratings)
-           
+
             if isparalell and torch.cuda.device_count()>1:
                 for x in item_batch_ratings:
+                    print('x.shape', x.shape)
                     batch_ratings.append(x.detach().cpu().numpy())
             else:
                 batch_ratings.append(item_batch_ratings.detach().cpu().numpy())
 
-        batch_ratings = np.concatenate(batch_ratings, axis=0) # (user_batch_size, Item_num)
+        batch_ratings = np.concatenate(batch_ratings, axis=1) # (user_batch_size, Item_num)
         # print('batch_ratings', batch_ratings.shape)
         user_batch_ratings = zip(batch_ratings, positive_items, negative_items)
         batch_metrics = pool.map(report_one_user, user_batch_ratings)
