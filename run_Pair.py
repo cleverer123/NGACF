@@ -120,10 +120,10 @@ def main(args):
         if args.parallel == True :
             device_count = torch.cuda.device_count()
             train_loader = DataLoader(train_data, batch_size=args.batch_size * device_count, shuffle=True,pin_memory=True)
-            test_loader = DataLoader(test_data, batch_size=32 * device_count, shuffle=False, pin_memory=False)
+            test_loader = DataLoader(test_data, batch_size=args.batch_size * device_count, shuffle=False, pin_memory=False)
         else:
             train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=True,pin_memory=True)
-            test_loader = DataLoader(test_data, batch_size=32 , shuffle=False, pin_memory=False)
+            test_loader = DataLoader(test_data, batch_size=args.batch_size , shuffle=False, pin_memory=False)
         
         
 
@@ -198,7 +198,7 @@ if __name__ == "__main__":
     parser.add_argument("--parallel", type=bool, default=True, help="whether to use parallel model")
     args = parser.parse_args()
     if args.parallel:
-        os.environ["CUDA_VISIBLE_DEVICES"] = '1, 2' 
+        os.environ["CUDA_VISIBLE_DEVICES"] = '0, 1, 2' 
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
     main(args)

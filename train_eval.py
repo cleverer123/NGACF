@@ -124,7 +124,7 @@ def eval_bpr(model, test_loader, test_user_num, itemNum, isparalell):
     else:
         item_loader = DataLoader(ItemDataSet(np.arange(itemNum)), batch_size=item_batch_size, shuffle=False, pin_memory=False)
     
-    for _, (user_batch, positive_items, negative_items) in enumerate(test_loader):
+    for batch_id, (user_batch, positive_items, negative_items) in enumerate(test_loader):
         # print(user_batch, positive_items, negative_items)
         u_idxs = user_batch.long().cuda()
         # print('u_idxs.shape', u_idxs.shape)
@@ -144,7 +144,9 @@ def eval_bpr(model, test_loader, test_user_num, itemNum, isparalell):
         # print('batch_ratings', batch_ratings.shape)
         user_batch_ratings = zip(batch_ratings, positive_items, negative_items)
         batch_metrics = pool.map(report_one_user, user_batch_ratings)
-
+        
+        print("The timeStamp of test batch {:03d}/{}".format(batch_id, len(test_loader)) + " is: " + time.strftime("%H: %M: %S", time.gmtime(time.time())))
+        
         for re in batch_metrics:
             result['precision'] += re['precision']/test_user_num
             result['recall'] += re['recall']/test_user_num
