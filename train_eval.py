@@ -124,29 +124,29 @@ def eval_bpr(model, test_loader, test_user_num, itemNum, isparalell):
     else:
         item_loader = DataLoader(ItemDataSet(np.arange(itemNum)), batch_size=item_batch_size, shuffle=False, pin_memory=False)
     
-    for _, (user_batch, positive_items, negative_items) in enumerate(test_loader):
-
+    for batch_id, (user_batch, positive_items, negative_items) in enumerate(test_loader):
+        # print(user_batch, positive_items, negative_items)
         u_idxs = user_batch.long().cuda()
         # print('u_idxs.shape', u_idxs.shape)
         batch_ratings = []
-        for b_idx, item_batch in enumerate(item_loader):
+        for _, item_batch in enumerate(item_loader):
             i_idxs = item_batch.long().cuda()
             item_batch_ratings = model(u_idxs, i_idxs)
-            # if b_idx ==0:
-            #     print('item_batch_ratings', item_batch_ratings)
-            # print(item_batch_ratings)
-           
+
             if isparalell and torch.cuda.device_count()>1:
                 for x in item_batch_ratings:
+                    print('x.shape', x.shape)
                     batch_ratings.append(x.detach().cpu().numpy())
             else:
                 batch_ratings.append(item_batch_ratings.detach().cpu().numpy())
 
-        batch_ratings = np.concatenate(batch_ratings, axis=0) # (user_batch_size, Item_num)
+        batch_ratings = np.concatenate(batch_ratings, axis=1) # (user_batch_size, Item_num)
         # print('batch_ratings', batch_ratings.shape)
         user_batch_ratings = zip(batch_ratings, positive_items, negative_items)
         batch_metrics = pool.map(report_one_user, user_batch_ratings)
-
+        
+        print("The timeStamp of test batch {:03d}/{}".format(batch_id, len(test_loader)) + " is: " + time.strftime("%H: %M: %S", time.gmtime(time.time())))
+        
         for re in batch_metrics:
             result['precision'] += re['precision']/test_user_num
             result['recall'] += re['recall']/test_user_num
@@ -156,6 +156,66 @@ def eval_bpr(model, test_loader, test_user_num, itemNum, isparalell):
 
     pool.close()
     return result   
+
+# def eval_bpr(model, test_loader, test_user_num, itemNum, isparalell):
+#     model.eval()
+#     Ks = [10,20]
+#     result = {'precision': np.zeros(len(Ks)), 'recall': np.zeros(len(Ks)), 'ndcg': np.zeros(len(Ks)),
+#               'hit_ratio': np.zeros(len(Ks)), 'auc': 0.}
+
+#     cores = multiprocessing.cpu_count() // 2
+#     # print('multiprocessing.cpu_count()', cores)
+#     pool = multiprocessing.Pool(cores)
+
+#     item_batch_size = 5000
+
+#     if isparalell:
+#         device_count = torch.cuda.device_count()
+#         item_loader = DataLoader(ItemDataSet(np.arange(itemNum)), batch_size=item_batch_size * device_count, shuffle=False, pin_memory=False)
+#     else:
+#         item_loader = DataLoader(ItemDataSet(np.arange(itemNum)), batch_size=item_batch_size, shuffle=False, pin_memory=False)
+#     # all_ratings = []
+#     for _, (user_batch, positive_items, negative_items) in enumerate(test_loader):
+#         print(user_batch, positive_items, negative_items)
+#         batch_ratings = []
+#         if isparalell and torch.cuda.device_count()>1:
+#             us = user_batch.long().cuda()
+#             for u in us:
+#                 u = user_batch.long().cuda()
+#                 for _, item_batch in enumerate(item_loader):
+#                     u_idxs = np.full(len(item_batch), u).long().cuda()
+#                     i_idxs = item_batch.long().cuda()
+#                     item_batch_ratings = model(u_idxs, i_idxs)
+#                     for x in item_batch_ratings:
+#                         batch_ratings.append(x.detach().cpu().numpy())
+                
+#         else:
+#             u = user_batch.long().cuda()
+#             for _, item_batch in enumerate(item_loader):
+#                 u_idxs = np.full(len(item_batch), u).long().cuda()
+#                 i_idxs = item_batch.long().cuda()
+#                 item_batch_ratings = model(u_idxs, i_idxs)
+#                 batch_ratings.append(item_batch_ratings.detach().cpu().numpy())
+        
+#         batch_ratings = np.concatenate(batch_ratings, axis=0) # (usernum=1 or device_count, Item_num)
+#         print('batch_ratings', batch_ratings.shape)
+#         # all_ratings.append(np.concatenate(user_batch_ratings, axis=0)) 
+
+#     # all_ratings = np.concatenate(all_ratings, axis=0) # (test_user_num, Item_num)
+        
+#         user_batch_ratings = zip(batch_ratings, positive_items, negative_items)
+#         batch_metrics = pool.map(report_one_user, user_batch_ratings)
+
+#         for re in batch_metrics:
+#             result['precision'] += re['precision']/test_user_num
+#             result['recall'] += re['recall']/test_user_num
+#             result['ndcg'] += re['ndcg']/test_user_num
+#             result['hit_ratio'] += re['hit_ratio']/test_user_num
+#             result['auc'] += re['auc']/test_user_num
+
+#     pool.close()
+#     return result   
+
 
 def report_one_user(x):
     Ks = [10, 20]
