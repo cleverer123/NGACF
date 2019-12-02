@@ -30,10 +30,11 @@ class PairDataset(Dataset):
         # userId, pos_itemId, neg_itemId
         return (self.data[index, 0], self.data[index, 1][0], self.data[index, 2][0])
 
+# TestDataSet is used when bpr loss is used and evaluate with all negtive items 
 class TestDataSet(Dataset):
-    def __init__(self, df):
+    def __init__(self, data):
         super(TestDataSet, self).__init__()
-        self.data = df
+        self.data = data
 
     def __len__(self):
         return len(self.data)
@@ -41,6 +42,19 @@ class TestDataSet(Dataset):
     def __getitem__(self, index):
         # test_userId, positive item set, negative item set
         return (self.data[index, 0], list(self.data[index, 1]), list(self.data[index, 2]))
+
+# TestDataSetNegSample is used when bpr loss is userd and evaluate with sampled negative items
+class TestDataSetNegSample(Dataset):
+    def __init__(self, data):
+        super(TestDataSetNegSample, self).__init__()
+        self.data = data
+    
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, index):
+        # test_userId, sampled negative item set
+        return (self.data[index, 0], self.data[index, 1], list(self.data[index, 2]))
 
 # ItemDataSet is used when evaluating test data 
 class ItemDataSet(Dataset):

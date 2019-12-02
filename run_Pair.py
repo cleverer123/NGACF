@@ -26,7 +26,7 @@ from graphattention.GCFmodel import  GCF, GCF_BPR
 from graphattention.GCFmodel import NCF
 from graphattention.BPRLoss import BPRLoss
 
-from train_eval import train, test, eval_rank, train_bpr, eval_bpr
+from train_eval import train, test, eval_rank, train_bpr, eval_bpr, eval_bpr_negsample
 
 from parallel import DataParallelModel, DataParallelCriterion
 
@@ -55,7 +55,7 @@ def prepareData(args):
 
 
 def createModels(args, userNum, itemNum, adj):
-    if args.evaluate == 'BPR':
+    if args.evaluate in ['BPR', 'BPR_NegSample']:
         if args.model == 'NCF':
             model = NCF(userNum, itemNum, 64, layers=[128,64,32,16,8]).cuda()
         elif args.model == 'GCF':
@@ -113,32 +113,34 @@ def main(args):
                     format(args.dataset, args.model, len(args.layers), args.lr, 
                     args.weight_decay, args.droprate, args.seed))
 
-    if args.evaluate == 'BPR':
+    if args.evaluate in ['BPR', 'BPR_NegSample']:
         train_data, test_data, userNum, itemNum, adj, test_user_num = load_data(args.dataset, args.evaluate, args.train, args.adj_type)
-        if args.parallel == True :
-            device_count = torch.cuda.device_count()
-            train_loader = DataLoader(train_data, batch_size=args.batch_size * device_count, shuffle=True,pin_memory=True)
-            test_loader = DataLoader(test_data, batch_size=args.batch_size * device_count, shuffle=False, pin_memory=False)
-        else:
-            train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=True,pin_memory=True)
-            test_loader = DataLoader(test_data, batch_size=args.batch_size , shuffle=False, pin_memory=False)
+        
+        train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=True,pin_memory=True)
+        test_loader = DataLoader(test_data, batch_size=args.batch_size , shuffle=False, pin_memory=False)
         
         model, lossfn, optim = createModels(args, userNum, itemNum, adj)
         for epoch in range(args.epochs):
             t0 = time.time()
-            train_loss = train_bpr(model, train_loader, optim, lossfn, args.parallel)
+            train_loss = train_bpr(model, train_loader, optim, lossfn)
             summaryWriter.add_scalar('loss/train_loss', train_loss, epoch)
             print("The time elapse of epoch {:03d}".format(epoch) + " is: " + time.strftime("%H: %M: %S", time.gmtime(time.time() - t0)))
             print('------epoch:{}, train_loss:{:5f}'.format(epoch, train_loss))
             if (epoch+1) % args.eval_every ==0 :
-                metrics = eval_bpr(model, test_loader, test_user_num, itemNum, args.parallel)
+                if args.evaluate == 'BPR':
+                    metrics = eval_bpr(model, test_loader, test_user_num, itemNum)
+                    print('epoch:{} metrics:{}'.format(epoch, metrics))
+                    for i, K in enumerate([10,20]):
+                        summaryWriter.add_scalar('metrics@{}/precision'.format(K), metrics['precision'][i], epoch)
+                        summaryWriter.add_scalar('metrics@{}/recall'.format(K), metrics['recall'][i], epoch)
+                        summaryWriter.add_scalar('metrics@{}/ndcg'.format(K), metrics['ndcg'][i], epoch)
+                        summaryWriter.add_scalar('metrics@{}/auc'.format(K), metrics['auc'], epoch)
+                elif args.evaluate == 'BPR_NegSample':
+                    metrics = eval_bpr_negsample(model, test_loader, 20)
+                    print('epoch:{} HR, NDCG:{}'.format(epoch, metrics))
+
                 # metrics = eval_bpr_sigmoid(model, test_loader, test_user_num, itemNum, args.parallel) 
-                print('epoch:{} metrics:{}'.format(epoch, metrics))
-                for i, K in enumerate([10,20]):
-                    summaryWriter.add_scalar('metrics@{}/precision'.format(K), metrics['precision'][i], epoch)
-                    summaryWriter.add_scalar('metrics@{}/recall'.format(K), metrics['recall'][i], epoch)
-                    summaryWriter.add_scalar('metrics@{}/ndcg'.format(K), metrics['ndcg'][i], epoch)
-                    summaryWriter.add_scalar('metrics@{}/auc'.format(K), metrics['auc'], epoch)
+                
                 
     else:
         train_loader, test_loader, userNum, itemNum, adj = prepareData(args)
@@ -189,12 +191,12 @@ if __name__ == "__main__":
     parser.add_argument("--seed", type=int, default=2019, help="the seed for random")
     parser.add_argument("--embedSize", type=int, default=64, help="the size for Embedding layer")
     parser.add_argument("--layers", type=list, default=[64,64], help="the layer list for propagation")
-    parser.add_argument("--evaluate", type=str, default="BPR", help="the way for evaluate[MSE, RANK, BPR]")
+    parser.add_argument("--evaluate", type=str, default="BPR", help="the way for evaluate[MSE, RANK, BPR, BPR_NegSample]")
     parser.add_argument("--parallel", type=bool, default=False, help="whether to use parallel model")
     args = parser.parse_args()
     if args.parallel:
         os.environ["CUDA_VISIBLE_DEVICES"] = '0, 1' 
-    os.environ["CUDA_VISIBLE_DEVICES"] = '0' 
+    os.environ["CUDA_VISIBLE_DEVICES"] = '3' 
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
     main(args)

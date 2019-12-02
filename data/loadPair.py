@@ -13,7 +13,7 @@ from scipy.sparse.coo import coo_matrix
 from ast import literal_eval
 from sklearn.model_selection import train_test_split
 
-from data.mldataset import MLDataSet, PairDataset, TestDataSet
+from data.mldataset import MLDataSet, PairDataset, TestDataSet, TestDataSetNegSample
 
 # dataset:movielens100K
 def load100KRatings(datapath):
@@ -56,24 +56,29 @@ def loadML1m():
 # 构建正负样本集合：userId：int; positive_items：set; negative_items: set.
 # 负样本集合为所有未在训练集中出现过的item.
 def train_positives_negtives(item_pool, train_df):
-    train_df = train_df.groupby('userId')['itemId'].apply(set).reset_index().rename(columns={'itemId': 'positive_items'})
-    train_df['negative_items'] = train_df['positive_items'].apply(lambda x: item_pool - x)
-    return train_df[['userId', 'positive_items', 'negative_items']]
+    train_pos_neg = train_df.groupby('userId')['itemId'].apply(set).reset_index().rename(columns={'itemId': 'positive_items'})
+    train_pos_neg['negative_items'] = train_pos_neg['positive_items'].apply(lambda x: item_pool - x)
+    return train_pos_neg[['userId', 'positive_items', 'negative_items']]
 
-def sample_train_pair(train_df):
+def sample_train_pair(train_pos_neg):
     # train_df: ['userId', 'positive_items', 'negative_items']
-    sampled_batch = train_df.sample(n=len(train_df))
+    sampled_batch = train_pos_neg.sample(n=len(train_pos_neg))
     # sampled_batch = train_df
     # sample pairs
     sampled_batch['pos_sample'] = sampled_batch['positive_items'].apply(lambda x: random.sample(x, 1))
     sampled_batch['neg_sample'] = sampled_batch['negative_items'].apply(lambda x: random.sample(x, 1))
     return sampled_batch[['userId', 'pos_sample', 'neg_sample']]
 
-def test_positives_negtives(train_df, test_df):
-    test_df = test_df.groupby('userId')['itemId'].apply(set).reset_index().rename(columns={'itemId': 'positive_items'})
-    test_df = pd.merge(test_df, train_df[['userId', 'negative_items']], on='userId')
-    test_user_num = len(test_df['userId'].unique())
-    return test_df[['userId', 'positive_items', 'negative_items']], test_user_num
+def test_positives_negtives(train_pos_neg, test_df):
+    test_pos_neg = test_df.groupby('userId')['itemId'].apply(set).reset_index().rename(columns={'itemId': 'positive_items'})
+    test_pos_neg = pd.merge(test_pos_neg, train_pos_neg[['userId', 'negative_items']], on='userId')
+    test_user_num = len(test_pos_neg['userId'].unique())
+    return test_pos_neg[['userId', 'positive_items', 'negative_items']], test_user_num
+
+def sample_test_negatives(test_df, test_pos_neg):
+    sample_test_neg = pd.merge(test_df, test_pos_neg[['userId', 'negative_items']], on='userId')
+    sample_test_neg['neg_sample'] = sample_test_neg['negative_items'].apply(lambda x: random.sample(x, 99))
+    return sample_test_neg[['userId', 'itemId', 'neg_sample']]
 
 def load_data(dataset, evaluate, ratio_train, adj_type):
     if dataset in ['Amazon', 'Gowalla']:
@@ -135,7 +140,7 @@ def load_data(dataset, evaluate, ratio_train, adj_type):
             train_data = MLDataSet(train_data)
             test_data = MLDataSet(test_data)
 
-        elif evaluate == 'BPR':
+        elif evaluate in ['BPR', 'BPR_NegSample']:
             
             # 如果是BPR模式，读取ml1m的数据的话，也是按照train、test分开读取的方式
             # train_df, test_df = train_test_split(rt, test_size=1-ratio_train)
@@ -147,13 +152,23 @@ def load_data(dataset, evaluate, ratio_train, adj_type):
             # print(train_df.values[:10,])
             item_pool = set(rt['itemId'].unique()) 
             # Generate Train_data
-            train_df = train_positives_negtives(item_pool, train_df)
-            train_data = sample_train_pair(train_df)
+            train_pos_neg = train_positives_negtives(item_pool, train_df)
+            train_data = sample_train_pair(train_pos_neg)
             train_data = PairDataset(train_data.values)
+            
+            test_pos_neg, test_user_num = test_positives_negtives(train_pos_neg, test_df)
             # Generate Test_data
-            test_df, test_user_num = test_positives_negtives(train_df, test_df)
-            test_data = TestDataSet(test_df.values)
+            if evaluate == 'BPR':
+                test_data = TestDataSet(test_pos_neg.values)
+            elif evaluate == 'BPR_NegSample':
+
+                test_data = sample_test_negatives(test_df, test_pos_neg)
+                test_data = TestDataSetNegSample(test_data.values)
             print('test_user_num:{}'.format(test_user_num))
+
+
+        
+
     
     adj = get_adj_mat(datapath, rt, userNum, itemNum, adj_type)
 

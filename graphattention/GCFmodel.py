@@ -166,31 +166,16 @@ class GCF_BPR(Module):
             finalEmbd = torch.cat([finalEmbd,features.clone()],dim=1)
 
         self.finalEmbd = finalEmbd
-        if self.training:
-            itemIdx = itemIdx + self.userNum
-            userEmbd = self.finalEmbd[userIdx]
-            itemEmbd = self.finalEmbd[itemIdx]
-            
-            embd = torch.cat([userEmbd,itemEmbd],dim=1)
-            embd = nn.ReLU()(self.transForm1(embd))
-            embd = nn.ReLU()(self.transForm2(embd))
-            embd = self.transForm3(embd)
-            prediction = embd.flatten()
-        else: 
-            itemIdx = itemIdx + self.userNum
-            # userIdx = torch.tensor([1, 2]) -> userIdx = torch.tensor([1, 1, 1, 2, 2, 2])
-            u_Idxs = userIdx.expand(itemIdx.shape[0], userIdx.shape[0]).transpose(1, 0).reshape(-1)
-            # itemIdx = torch.tensor([3, 4, 5]) -> itemIdx = torch.tensor([3, 4, 5, 3, 4, 5])
-            i_Idxs = itemIdx.expand(userIdx.shape[0], itemIdx.shape[0]).reshape(-1)
-
-            userEmbd = self.finalEmbd[u_Idxs]
-            itemEmbd = self.finalEmbd[i_Idxs]   
-
-            embd = torch.cat([userEmbd,itemEmbd],dim=1)
-            embd = nn.ReLU()(self.transForm1(embd))
-            embd = nn.ReLU()(self.transForm2(embd))
-            embd = self.transForm3(embd)
-            prediction = embd.reshape(userIdx.shape[0], itemIdx.shape[0])
+        
+        itemIdx = itemIdx + self.userNum
+        userEmbd = self.finalEmbd[userIdx]
+        itemEmbd = self.finalEmbd[itemIdx]
+        
+        embd = torch.cat([userEmbd,itemEmbd],dim=1)
+        embd = nn.ReLU()(self.transForm1(embd))
+        embd = nn.ReLU()(self.transForm2(embd))
+        embd = self.transForm3(embd)
+        prediction = embd.flatten()
         return prediction
 
 class GCF(Module):
