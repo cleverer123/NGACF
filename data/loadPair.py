@@ -140,7 +140,11 @@ def load_data(dataset, evaluate, ratio_train, adj_type):
             # 如果是BPR模式，读取ml1m的数据的话，也是按照train、test分开读取的方式
             # train_df, test_df = train_test_split(rt, test_size=1-ratio_train)
             train_df, test_df = loadML1m()
-            print(train_df.values[:10,])
+            train_df['userId'] = train_df['userId'] - 1
+            train_df['itemId'] = train_df['itemId'] - 1
+            test_df['userId'] = test_df['userId'] - 1
+            test_df['itemId'] = test_df['itemId'] - 1
+            # print(train_df.values[:10,])
             item_pool = set(rt['itemId'].unique()) 
             # Generate Train_data
             train_df = train_positives_negtives(item_pool, train_df)

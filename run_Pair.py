@@ -53,8 +53,6 @@ def prepareData(args):
     
     return train_loader, test_loader, userNum, itemNum, adj
 
-    
-    
 
 def createModels(args, userNum, itemNum, adj):
     if args.evaluate == 'BPR':
@@ -125,10 +123,7 @@ def main(args):
             train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=True,pin_memory=True)
             test_loader = DataLoader(test_data, batch_size=args.batch_size , shuffle=False, pin_memory=False)
         
-        
-
         model, lossfn, optim = createModels(args, userNum, itemNum, adj)
-
         for epoch in range(args.epochs):
             t0 = time.time()
             train_loss = train_bpr(model, train_loader, optim, lossfn, args.parallel)
@@ -137,6 +132,7 @@ def main(args):
             print('------epoch:{}, train_loss:{:5f}'.format(epoch, train_loss))
             if (epoch+1) % args.eval_every ==0 :
                 metrics = eval_bpr(model, test_loader, test_user_num, itemNum, args.parallel)
+                # metrics = eval_bpr_sigmoid(model, test_loader, test_user_num, itemNum, args.parallel) 
                 print('epoch:{} metrics:{}'.format(epoch, metrics))
                 for i, K in enumerate([10,20]):
                     summaryWriter.add_scalar('metrics@{}/precision'.format(K), metrics['precision'][i], epoch)
@@ -150,7 +146,6 @@ def main(args):
 
         for epoch in range(args.epochs):
             start_time = time.time()
-
             
             train_loss = train(model, train_loader, optim, lossfn)
             summaryWriter.add_scalar('loss/train_loss', train_loss, epoch)
@@ -195,10 +190,11 @@ if __name__ == "__main__":
     parser.add_argument("--embedSize", type=int, default=64, help="the size for Embedding layer")
     parser.add_argument("--layers", type=list, default=[64,64], help="the layer list for propagation")
     parser.add_argument("--evaluate", type=str, default="BPR", help="the way for evaluate[MSE, RANK, BPR]")
-    parser.add_argument("--parallel", type=bool, default=True, help="whether to use parallel model")
+    parser.add_argument("--parallel", type=bool, default=False, help="whether to use parallel model")
     args = parser.parse_args()
     if args.parallel:
-        os.environ["CUDA_VISIBLE_DEVICES"] = '0, 1, 2' 
+        os.environ["CUDA_VISIBLE_DEVICES"] = '0, 1' 
+    os.environ["CUDA_VISIBLE_DEVICES"] = '0' 
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
     main(args)

@@ -101,6 +101,10 @@ class GCF_BPR(Module):
         self.leakyRelu = nn.LeakyReLU()
         self.selfLoop = self.getSparseEye(self.userNum+self.itemNum)
 
+        self.transForm1 = nn.Linear(in_features=sum(layers)*2, out_features=64)
+        self.transForm2 = nn.Linear(in_features=64,out_features=32)
+        self.transForm3 = nn.Linear(in_features=32,out_features=1)
+
         for From,To in zip(layers[:-1],layers[1:]):
             self.GNNlayers.append(GNNLayer(From,To))
         
@@ -109,6 +113,15 @@ class GCF_BPR(Module):
     def _init_weight_(self):
         nn.init.normal_(self.uEmbd.weight, std=0.01)
         nn.init.normal_(self.iEmbd.weight, std=0.01)
+
+        nn.init.xavier_uniform_(self.transForm1.weight)
+        self.transForm1.bias.data.zero_()
+
+        nn.init.xavier_uniform_(self.transForm2.weight)
+        self.transForm2.bias.data.zero_()
+
+        nn.init.xavier_uniform_(self.transForm3.weight)
+        self.transForm3.bias.data.zero_()
 
     def getSparseEye(self,num):
         i = torch.LongTensor([[k for k in range(0,num)],[j for j in range(0,num)]])
@@ -126,6 +139,24 @@ class GCF_BPR(Module):
         features = torch.cat([userEmbd,itemEmbd],dim=0)
         return features
 
+    # def forward(self,userIdx,itemIdx):
+    #     features = self.getFeatureMat()
+    #     finalEmbd = features.clone()
+    #     for gnn in self.GNNlayers:
+    #         features = gnn(self.LaplacianMat,self.selfLoop,features)
+    #         features = nn.ReLU()(features)
+    #         finalEmbd = torch.cat([finalEmbd,features.clone()],dim=1)
+
+    #     self.finalEmbd = finalEmbd
+
+    #     itemIdx = itemIdx + self.userNum
+    #     userEmbd = self.finalEmbd[userIdx]
+    #     itemEmbd = self.finalEmbd[itemIdx]
+    #     if self.training:
+    #         return torch.sum(userEmbd * itemEmbd, dim=1)
+    #     else:
+    #         return torch.mm(userEmbd, itemEmbd.transpose(1, 0)) 
+
     def forward(self,userIdx,itemIdx):
         features = self.getFeatureMat()
         finalEmbd = features.clone()
@@ -135,14 +166,32 @@ class GCF_BPR(Module):
             finalEmbd = torch.cat([finalEmbd,features.clone()],dim=1)
 
         self.finalEmbd = finalEmbd
-
-        itemIdx = itemIdx + self.userNum
-        userEmbd = self.finalEmbd[userIdx]
-        itemEmbd = self.finalEmbd[itemIdx]
         if self.training:
-            return torch.sum(userEmbd * itemEmbd, dim=1)
-        else:
-            return torch.mm(userEmbd, itemEmbd.transpose(1, 0)) 
+            itemIdx = itemIdx + self.userNum
+            userEmbd = self.finalEmbd[userIdx]
+            itemEmbd = self.finalEmbd[itemIdx]
+            
+            embd = torch.cat([userEmbd,itemEmbd],dim=1)
+            embd = nn.ReLU()(self.transForm1(embd))
+            embd = nn.ReLU()(self.transForm2(embd))
+            embd = self.transForm3(embd)
+            prediction = embd.flatten()
+        else: 
+            itemIdx = itemIdx + self.userNum
+            # userIdx = torch.tensor([1, 2]) -> userIdx = torch.tensor([1, 1, 1, 2, 2, 2])
+            u_Idxs = userIdx.expand(itemIdx.shape[0], userIdx.shape[0]).transpose(1, 0).reshape(-1)
+            # itemIdx = torch.tensor([3, 4, 5]) -> itemIdx = torch.tensor([3, 4, 5, 3, 4, 5])
+            i_Idxs = itemIdx.expand(userIdx.shape[0], itemIdx.shape[0]).reshape(-1)
+
+            userEmbd = self.finalEmbd[u_Idxs]
+            itemEmbd = self.finalEmbd[i_Idxs]   
+
+            embd = torch.cat([userEmbd,itemEmbd],dim=1)
+            embd = nn.ReLU()(self.transForm1(embd))
+            embd = nn.ReLU()(self.transForm2(embd))
+            embd = self.transForm3(embd)
+            prediction = embd.reshape(userIdx.shape[0], itemIdx.shape[0])
+        return prediction
 
 class GCF(Module):
 
@@ -248,4 +297,4 @@ class GCF(Module):
         embd = self.transForm3(embd)
         prediction = embd.flatten()
         
-        return prediction
+        return prediction  
