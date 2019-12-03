@@ -174,7 +174,7 @@ def eval_neg_sample(model, test_loader, test_user_num, top_k):
         if batch_id % 240 == 0 :
             print("The timeStamp of evaluating batch {:03d}/{}".format(batch_id, len(test_loader)) + " is: " + time.strftime("%H: %M: %S", time.gmtime(time.time())))
     pool.close()
-    return np.sum(HR)/test_user_num, np.sum(NDCG)/test_user_num
+    return np.mean(HR), np.mean(NDCG)
 
 def report_pos_neg(x):
     # print(x)
