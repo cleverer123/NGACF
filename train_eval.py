@@ -118,23 +118,25 @@ def eval_neg_sample(model, test_loader, test_user_num, top_k):
         #  tensor([1,         tensor([i1,          [tensor([i2,i4,i5]), 
         #          1,                 i3,           tensor([i2,i4,i5]),
         #          3])                i2])          tensor([i1,i3,i5])]
-        userIdx = userIdx.long().cuda()        
-        pos_itemIdx = pos_itemIdx.long().cuda()        
-        neg_itemIdxs = torch.stack(neg_itemIdxs).transpose(1,0).long().cuda()  # (batch_size, negsample_size)    
-        itemIdxs = torch.cat([pos_itemIdx.reshape(-1,1), neg_itemIdxs], dim=1)
+        userIdx = userIdx.long().cuda()     
+        pos_itemIdx = pos_itemIdx.reshape(-1,1).long().cuda()  # (batch_size, 1)         
+        neg_itemIdxs = torch.stack(neg_itemIdxs).long().cuda()  # (99, batch_size)    
+        itemIdxs = torch.cat([pos_itemIdx, neg_itemIdxs.transpose(1,0)], dim=1) # (batch_size, 100)
 
-        u_Idxs = userIdx.expand(itemIdxs.shape[1], userIdx.shape[0]).transpose(1, 0).reshape(-1)
+        u_Idxs = userIdx.expand(itemIdxs.shape[1], userIdx.shape[0]).transpose(1, 0).reshape(-1) #(batch_size * 100)
         i_Idxs = itemIdxs.reshape(-1)
         predictions = model(u_Idxs, i_Idxs)
         predictions = predictions.reshape(-1, itemIdxs.shape[1])
 
-        _, indices = torch.topk(predictions, top_k, dim=1)
-        # print('indices',indices.shape)
-        recommends = torch.take(itemIdxs.transpose(1, 0), indices)
-        x = zip(pos_itemIdx.cpu().numpy(), recommends.cpu().numpy())
+        _, indices = torch.topk(predictions, top_k, dim=1) # (batch_size, top_k)
+        # recommends = torch.take(itemIdxs, indices)
+        # x = zip(pos_itemIdx.cpu().numpy(), recommends.cpu().numpy())
 
-        res = pool.map(report_pos_neg, x)
+        # res = pool.map(report_pos_neg, x)
         
+        x = zip(pos_itemIdx.cpu().numpy(), itemIdxs.cpu(), indices.cpu())
+        res = pool.map(report_pos_neg, x)
+
         res = np.array(res)
         
         HR.extend(res[:].tolist())
@@ -146,7 +148,13 @@ def eval_neg_sample(model, test_loader, test_user_num, top_k):
     return np.sum(HR)/test_user_num, np.sum(NDCG)/test_user_num
 
 def report_pos_neg(x):
-    pos_itemIdx, recommends = x
+    # print(x)
+    # pos_itemIdx, recommends = x
+    # recommends = list(recommends)
+    # return hit(pos_itemIdx, recommends), ndcg(pos_itemIdx, recommends) 
+    pos_itemIdx, itemIdxs, indices = x
+    pos_itemIdx = int(pos_itemIdx)
+    recommends = torch.take(itemIdxs, indices)
     recommends = list(recommends)
     return hit(pos_itemIdx, recommends), ndcg(pos_itemIdx, recommends) 
 
