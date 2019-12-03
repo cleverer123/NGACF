@@ -60,14 +60,11 @@ def train_positives_negtives(item_pool, train_df):
     train_pos_neg['negative_items'] = train_pos_neg['positive_items'].apply(lambda x: item_pool - x)
     return train_pos_neg[['userId', 'positive_items', 'negative_items']]
 
-def train_pair_sampling(train_pos_neg):
-    # train_df: ['userId', 'positive_items', 'negative_items']
-    sampled_batch = train_pos_neg.sample(n=len(train_pos_neg))
-    # sampled_batch = train_df
-    # sample pairs
-    sampled_batch['pos_sample'] = sampled_batch['positive_items'].apply(lambda x: random.sample(x, 1))
-    sampled_batch['neg_sample'] = sampled_batch['negative_items'].apply(lambda x: random.sample(x, 1))
-    return sampled_batch[['userId', 'pos_sample', 'neg_sample']]
+def train_pair_sampling(train_df, train_pos_neg):
+    sampled_train_pair = pd.merge(train_df, train_pos_neg[['userId', 'positive_items', 'negative_items']], on='userId')
+    sampled_train_pair['pos_sample'] = sampled_train_pair['positive_items'].apply(lambda x: random.sample(x, 1))
+    sampled_train_pair['neg_sample'] = sampled_train_pair['negative_items'].apply(lambda x: random.sample(x, 1))
+    return sampled_train_pair[['userId', 'pos_sample', 'neg_sample']]
 
 def train_neg_sampling(train_df, train_pos_neg):
     sample_train_neg = pd.merge(train_df, train_pos_neg[['userId', 'negative_items']], on='userId')
@@ -86,7 +83,7 @@ def construct_neg_samples_labels(sampled_train_neg):
             ratings.append(float(0))  # negative samples get 0 rating
     return np.stack([users, items, ratings], axis=1)
 
-def test_positives_negtives(train_pos_neg, test_df):
+def test_positives_negtives(test_df, train_pos_neg):
     test_pos_neg = test_df.groupby('userId')['itemId'].apply(set).reset_index().rename(columns={'itemId': 'positive_items'})
     test_pos_neg = pd.merge(test_pos_neg, train_pos_neg[['userId', 'negative_items']], on='userId')
     test_user_num = len(test_pos_neg['userId'].unique())
@@ -102,14 +99,14 @@ def load_train_test_data(rt, train_df, test_df, trainMode, evalmode):
     train_pos_neg = train_positives_negtives(item_pool, train_df)
     # Generate train_data
     if trainMode == 'PairSampling':
-        sampled_train_pair = train_pair_sampling(train_pos_neg)
+        sampled_train_pair = train_pair_sampling(train_df, train_pos_neg)
         train_data = PairDataset(sampled_train_pair.values)          
     elif trainMode == 'NegSampling': 
         sampled_train_neg = train_neg_sampling(train_df, train_pos_neg)
         neg_sample_with_label = construct_neg_samples_labels(sampled_train_neg)
         train_data = MLDataSet(neg_sample_with_label)
     # Generate test_data
-    test_pos_neg, test_user_num = test_positives_negtives(train_pos_neg, test_df)    
+    test_pos_neg, test_user_num = test_positives_negtives(test_df, train_pos_neg)    
     if evalmode =='AllNeg':
         test_data = AllNegtivesDataSet(test_pos_neg.values)
     elif evalmode == 'SampledNeg':

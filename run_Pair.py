@@ -170,7 +170,7 @@ def main(args):
                     summaryWriter.add_scalar('metrics@{}/ndcg'.format(K), metrics['ndcg'][i], epoch)
                     summaryWriter.add_scalar('metrics@{}/auc'.format(K), metrics['auc'], epoch)
             elif args.eval_mode == 'SampledNeg':
-                HR, NDCG = eval_neg_sample(model, test_loader, test_user_num, 10)
+                HR, NDCG = eval_neg_sample(model, test_loader, test_user_num, 10, args.parallel)
                 print('epoch:{}, HR:{:5f}, NDCG:{:5f}'.format(epoch, HR, NDCG))
                 summaryWriter.add_scalar('metrics/HR', HR, epoch)
                 summaryWriter.add_scalar('metrics/NDCG', NDCG, epoch)

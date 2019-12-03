@@ -37,18 +37,18 @@ def train_neg_sample(model, train_loader, optim, lossfn):
     model.train()
     total_loss = 0.0
     for batch_id, (userIdx, pos_itemIdx, neg_itemIdxs) in enumerate(train_loader):
-        userIdx = userIdx.long().cuda() 
-        pos_itemIdx = pos_itemIdx.reshape(-1,1).long().cuda() # (batch_size, 1)  
-        neg_itemIdxs = torch.stack(neg_itemIdxs).transpose(1,0).long().cuda()  # (batch_size, 99) 
+        # userIdx = userIdx.long().cuda() 
+        pos_itemIdx = pos_itemIdx.reshape(-1,1) # (batch_size, 1)  
+        neg_itemIdxs = torch.stack(neg_itemIdxs).transpose(1,0)  # (batch_size, 99) 
         itemIdxs = torch.cat([pos_itemIdx, neg_itemIdxs], dim=1) # (batch_size, 100)
 
-        pos_labels = torch.ones_like(pos_itemIdx).float().cuda()
-        neg_labels = torch.zeros_like(neg_itemIdxs).float().cuda()
+        pos_labels = torch.ones_like(pos_itemIdx)
+        neg_labels = torch.zeros_like(neg_itemIdxs)
         labels = torch.cat([pos_labels, neg_labels], dim=1)
 
-        u_Idxs = userIdx.expand(itemIdxs.shape[1], userIdx.shape[0]).transpose(1, 0).reshape(-1) #(batch_size * 100)
-        i_Idxs = itemIdxs.reshape(-1)
-        labels = labels.reshape(-1)
+        u_Idxs = userIdx.expand(itemIdxs.shape[1], userIdx.shape[0]).transpose(1, 0).reshape(-1).long().cuda()  #(batch_size * 100)
+        i_Idxs = itemIdxs.reshape(-1).long().cuda() 
+        labels = labels.reshape(-1).float().cuda()
 
         optim.zero_grad()
         predictions = model(u_Idxs, i_Idxs) 
@@ -136,7 +136,7 @@ def eval_rank(model, test_loader, lossfn, parallel, top_k):
     return np.mean(HR), np.mean(NDCG)
 
 ########################################## Eval for test data with negtive samples #################################################
-def eval_neg_sample(model, test_loader, test_user_num, top_k):
+def eval_neg_sample(model, test_loader, test_user_num, top_k, is_parallel):
     model.eval()
     HR, NDCG = [], []
     cores = multiprocessing.cpu_count() // 2
@@ -147,23 +147,27 @@ def eval_neg_sample(model, test_loader, test_user_num, top_k):
         #  tensor([1,         tensor([i1,          [tensor([i2,i4,i5]), 
         #          1,                 i3,           tensor([i2,i4,i5]),
         #          3])                i2])          tensor([i1,i3,i5])]
-        userIdx = userIdx.long().cuda()     
-        pos_itemIdx = pos_itemIdx.reshape(-1,1).long().cuda()  # (batch_size, 1)         
-        neg_itemIdxs = torch.stack(neg_itemIdxs).transpose(1,0).long().cuda()  # (batch_size, 99)    
+        # userIdx = userIdx.long().cuda()     
+        pos_itemIdx = pos_itemIdx.reshape(-1,1)  # (batch_size, 1)         
+        neg_itemIdxs = torch.stack(neg_itemIdxs).transpose(1,0)  # (batch_size, 99)    
         itemIdxs = torch.cat([pos_itemIdx, neg_itemIdxs], dim=1) # (batch_size, 100)
 
-        u_Idxs = userIdx.expand(itemIdxs.shape[1], userIdx.shape[0]).transpose(1, 0).reshape(-1) #(batch_size * 100)
-        i_Idxs = itemIdxs.reshape(-1)
+        u_Idxs = userIdx.expand(itemIdxs.shape[1], userIdx.shape[0]).transpose(1, 0).reshape(-1).long().cuda() #(batch_size * 100)
+        i_Idxs = itemIdxs.reshape(-1).long().cuda()
         predictions = model(u_Idxs, i_Idxs)
-        predictions = predictions.reshape(-1, itemIdxs.shape[1])
-
-        _, indices = torch.topk(predictions, top_k, dim=1) # (batch_size, top_k)
-        # recommends = torch.take(itemIdxs, indices)
-        # x = zip(pos_itemIdx.cpu().numpy(), recommends.cpu().numpy())
-
-        # res = pool.map(report_pos_neg, x)
         
-        x = zip(pos_itemIdx.cpu().numpy(), itemIdxs.cpu(), indices.cpu())
+        if is_parallel and torch.cuda.device_count()>1:
+            l = []
+            for prediction in predictions:
+                l.append(prediction.detach().cpu())
+            predictions = torch.cat(l, dim=0)
+        else:
+            predictions = predictions.detach().cpu()
+
+        predictions = predictions.reshape(-1, itemIdxs.shape[1])
+        _, indices = torch.topk(predictions, top_k, dim=1) # (batch_size, top_k)
+        # x = zip(pos_itemIdx.cpu().numpy(), itemIdxs.cpu(), indices.cpu())
+        x = zip(pos_itemIdx, itemIdxs, indices)
         res = pool.map(report_pos_neg, x)
 
         res = np.array(res)
