@@ -84,8 +84,8 @@ def train_bpr(model, train_loader, optim, lossfn):
         optim.step()
         # total_loss += loss.sum().item()
         total_loss += loss.item()
-        # if batch_id % 60 == 0 :
-        print("The timeStamp of training batch {:03d}/{}".format(batch_id, len(train_loader)) + " is: " + time.strftime("%H: %M: %S", time.gmtime(time.time())))
+        if batch_id % 60 == 0 :
+            print("The timeStamp of training batch {:03d}/{}".format(batch_id, len(train_loader)) + " is: " + time.strftime("%H: %M: %S", time.gmtime(time.time())))
             
     return total_loss/len(train_loader)
 
@@ -223,7 +223,8 @@ def eval_neg_all(model, test_loader, test_user_num, itemNum):
         user_batch_ratings = zip(batch_ratings, pos_itemIdxs, neg_itemIdxs)
         batch_metrics = pool.map(report_one_user, user_batch_ratings)
         
-        print("The timeStamp of test batch {:03d}/{}".format(batch_id, len(test_loader)) + " is: " + time.strftime("%H: %M: %S", time.gmtime(time.time())))
+        if batch_id % 240 == 0 :
+            print("The timeStamp of test batch {:03d}/{}".format(batch_id, len(test_loader)) + " is: " + time.strftime("%H: %M: %S", time.gmtime(time.time())))
         
         for re in batch_metrics:
             result['precision'] += re['precision']/test_user_num
