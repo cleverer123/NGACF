@@ -106,7 +106,8 @@ def eval_rank(model, test_loader, lossfn, parallel, top_k):
 
     return np.mean(HR), np.mean(NDCG)
 
-def eval_bpr_negsample(model, test_loader, top_k):
+########################################## Eval for test data with negtive samples #################################################
+def eval_neg_sample(model, test_loader, top_k):
     model.eval()
     HR, NDCG = [], []
     cores = multiprocessing.cpu_count() // 2
@@ -150,8 +151,8 @@ def report_pos_neg(x):
     return hit(pos_itemIdx, recommends), ndcg(pos_itemIdx, recommends) 
 
 
-########################################## Eval for bpr_loss #################################################
-def eval_bpr(model, test_loader, test_user_num, itemNum):
+########################################## Eval for test data with all negtive #################################################
+def eval_neg_all(model, test_loader, test_user_num, itemNum):
     model.eval()
     Ks = [10,20]
     result = {'precision': np.zeros(len(Ks)), 'recall': np.zeros(len(Ks)), 'ndcg': np.zeros(len(Ks)),
@@ -178,24 +179,6 @@ def eval_bpr(model, test_loader, test_user_num, itemNum):
             batch_ratings.append(item_batch_ratings.detach().cpu().numpy())
         batch_ratings = np.concatenate(batch_ratings, axis=1) # (user_batch_size, Item_num)
 
-        # u_idxs = user_batch.long().cuda()
-        # # print('u_idxs.shape', u_idxs.shape)
-        # batch_ratings = []
-        # for _, item_batch in enumerate(item_loader):
-        #     i_idxs = item_batch.long().cuda()
-        #     item_batch_ratings = model(u_idxs, i_idxs)
-
-        #     if isparalell and torch.cuda.device_count()>1:
-        #         for x in item_batch_ratings:
-        #             # print('x.shape', x.shape)
-        #             batch_ratings.append(x.detach().cpu().numpy())
-        #     else:
-        #         batch_ratings.append(item_batch_ratings.detach().cpu().numpy())
-
-        # batch_ratings = np.concatenate(batch_ratings, axis=1) # (user_batch_size, Item_num)
-        # print('batch_ratings', batch_ratings.shape)
-
-        # if batch_id == len(test_loader)-1:
         user_batch_ratings = zip(batch_ratings, pos_itemIdxs, neg_itemIdxs)
         batch_metrics = pool.map(report_one_user, user_batch_ratings)
         

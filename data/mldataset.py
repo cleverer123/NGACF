@@ -18,6 +18,7 @@ class MLDataSet(Dataset):
     def __getitem__(self, item):
         return (self.uId[item],self.iId[item],self.rt[item])
 
+# PairDataset is used when train bpr loss is used. 
 class PairDataset(Dataset):
     def __init__(self, df):
         super(PairDataset, self).__init__()
@@ -30,10 +31,10 @@ class PairDataset(Dataset):
         # userId, pos_itemId, neg_itemId
         return (self.data[index, 0], self.data[index, 1][0], self.data[index, 2][0])
 
-# TestDataSet is used when bpr loss is used and evaluate with all negtive items 
-class TestDataSet(Dataset):
+# AllNegtivesDataSet is used when evaluate with all negtive items 
+class AllNegtivesDataSet(Dataset):
     def __init__(self, data):
-        super(TestDataSet, self).__init__()
+        super(AllNegtivesDataSet, self).__init__()
         self.data = data
 
     def __len__(self):
@@ -43,17 +44,17 @@ class TestDataSet(Dataset):
         # test_userId, positive item set, negative item set
         return (self.data[index, 0], list(self.data[index, 1]), list(self.data[index, 2]))
 
-# TestDataSetNegSample is used when bpr loss is userd and evaluate with sampled negative items
-class TestDataSetNegSample(Dataset):
+# NegSampleDataSet is used when evaluate with sampled negative items
+class SampledNegtivesDataSet(Dataset):
     def __init__(self, data):
-        super(TestDataSetNegSample, self).__init__()
+        super(SampledNegtivesDataSet, self).__init__()
         self.data = data
     
     def __len__(self):
         return len(self.data)
 
     def __getitem__(self, index):
-        # test_userId, sampled negative item set
+        # test_userId, one positive item, sampled negative item set
         return (self.data[index, 0], self.data[index, 1], list(self.data[index, 2]))
 
 # ItemDataSet is used when evaluating test data 

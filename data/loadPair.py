@@ -13,7 +13,7 @@ from scipy.sparse.coo import coo_matrix
 from ast import literal_eval
 from sklearn.model_selection import train_test_split
 
-from data.mldataset import MLDataSet, PairDataset, TestDataSet, TestDataSetNegSample
+from data.mldataset import MLDataSet, PairDataset, AllNegtivesDataSet, SampledNegtivesDataSet
 
 # dataset:movielens100K
 def load100KRatings(datapath):
@@ -60,7 +60,7 @@ def train_positives_negtives(item_pool, train_df):
     train_pos_neg['negative_items'] = train_pos_neg['positive_items'].apply(lambda x: item_pool - x)
     return train_pos_neg[['userId', 'positive_items', 'negative_items']]
 
-def sample_train_pair(train_pos_neg):
+def train_pair_sampling(train_pos_neg):
     # train_df: ['userId', 'positive_items', 'negative_items']
     sampled_batch = train_pos_neg.sample(n=len(train_pos_neg))
     # sampled_batch = train_df
@@ -69,16 +69,95 @@ def sample_train_pair(train_pos_neg):
     sampled_batch['neg_sample'] = sampled_batch['negative_items'].apply(lambda x: random.sample(x, 1))
     return sampled_batch[['userId', 'pos_sample', 'neg_sample']]
 
+def train_neg_sampling(train_df, train_pos_neg):
+    sample_train_neg = pd.merge(train_df, train_pos_neg[['userId', 'negative_items']], on='userId')
+    sample_train_neg['neg_samples'] = sample_train_neg['negative_items'].apply(lambda x: random.sample(x, 4))
+    return sample_train_neg[['userId', 'itemId', 'neg_samples']]
+
+def construct_neg_samples_labels(sampled_train_neg):
+    users, items, ratings = [], [], []
+    for row in sampled_train_neg.itertuples():
+        users.append(int(row.userId))
+        items.append(int(row.itemId))
+        ratings.append(float(1))
+        for neg in row.neg_samples:
+            users.append(int(row.userId))
+            items.append(int(neg))
+            ratings.append(float(0))  # negative samples get 0 rating
+    return np.stack([users, items, ratings], axis=1)
+
 def test_positives_negtives(train_pos_neg, test_df):
     test_pos_neg = test_df.groupby('userId')['itemId'].apply(set).reset_index().rename(columns={'itemId': 'positive_items'})
     test_pos_neg = pd.merge(test_pos_neg, train_pos_neg[['userId', 'negative_items']], on='userId')
     test_user_num = len(test_pos_neg['userId'].unique())
     return test_pos_neg[['userId', 'positive_items', 'negative_items']], test_user_num
 
-def sample_test_negatives(test_df, test_pos_neg):
+def test_neg_sampling(test_df, test_pos_neg):
     sample_test_neg = pd.merge(test_df, test_pos_neg[['userId', 'negative_items']], on='userId')
     sample_test_neg['neg_sample'] = sample_test_neg['negative_items'].apply(lambda x: random.sample(x, 99))
     return sample_test_neg[['userId', 'itemId', 'neg_sample']]
+
+def load_train_test_data(rt, train_df, test_df, trainMode, evalmode):
+    item_pool = set(rt['itemId'].unique()) 
+    train_pos_neg = train_positives_negtives(item_pool, train_df)
+    # Generate train_data
+    if trainMode == 'PairSampling':
+        sampled_train_pair = train_pair_sampling(train_pos_neg)
+        train_data = PairDataset(sampled_train_pair.values)          
+    elif trainMode == 'NegSampling': 
+        sampled_train_neg = train_neg_sampling(train_df, train_pos_neg)
+        neg_sample_with_label = construct_neg_samples_labels(sampled_train_neg)
+        train_data = MLDataSet(neg_sample_with_label)
+    # Generate test_data
+    test_pos_neg, test_user_num = test_positives_negtives(train_pos_neg, test_df)    
+    if evalmode =='AllNeg':
+        test_data = AllNegtivesDataSet(test_pos_neg.values)
+    elif evalmode == 'SampledNeg':
+        sampled_test_neg = test_neg_sampling(test_df, test_pos_neg)
+        test_data = SampledNegtivesDataSet(sampled_test_neg.values)
+    print('Size of train_data:{} test_data:{}'.format(len(train_data), len(test_data)))
+    return train_data, test_data, test_user_num
+    
+    
+def load_data_adj(dataset, ratio_train, adj_type, trainMode, evalmode):
+    if dataset in ['Amazon', 'Gowalla']:
+        datapath = path.dirname(__file__) + '/' + dataset
+        rt, train_df, test_df = loadAmazon_Gowalla(dataset)
+        # Amazon and Gowalla index starts at 0
+        userNum = rt['userId'].max() + 1  
+        itemNum = rt['itemId'].max() + 1
+        print('userNum:{}, itemNum:{}'.format(userNum, itemNum))
+    elif dataset == 'ml1m':
+        datapath = path.dirname(__file__) + '/1M'
+        rt = load1MRatings(datapath)
+        userNum = rt['userId'].max()
+        itemNum = rt['itemId'].max()
+        rt['userId'] = rt['userId'] - 1
+        rt['itemId'] = rt['itemId'] - 1
+        print('userNum:{}, itemNum:{}'.format(userNum, itemNum))
+        train_df, test_df = loadML1m()
+        train_df['userId'] = train_df['userId'] - 1
+        train_df['itemId'] = train_df['itemId'] - 1
+        test_df['userId'] = test_df['userId'] - 1
+        test_df['itemId'] = test_df['itemId'] - 1
+
+    elif dataset == 'ml100k':
+        datapath = path.dirname(__file__) + '/1K'
+        rt = load100KRatings(datapath)
+        # ml100k index starts at 1
+        userNum = rt['userId'].max()
+        itemNum = rt['itemId'].max()
+        print('userNum:{}, itemNum:{}'.format(userNum, itemNum))
+        rt['userId'] = rt['userId'] - 1
+        rt['itemId'] = rt['itemId'] - 1
+        train_df, test_df = train_test_split(rt, test_size=1-ratio_train)
+    print('train_len:{}, test_len:{}'.format(len(train_df), len(test_df)))
+
+    t0 = time.time()
+    train_data, test_data, test_user_num = load_train_test_data(rt, train_df, test_df, trainMode, evalmode)
+    print('Time consuming of generating train_test data:', time.time() - t0)
+    adj = get_adj_mat(datapath, rt, userNum, itemNum, adj_type)   
+    return train_data, test_data, userNum, itemNum, adj, test_user_num
 
 def load_data(dataset, evaluate, ratio_train, adj_type):
     if dataset in ['Amazon', 'Gowalla']:
@@ -95,12 +174,12 @@ def load_data(dataset, evaluate, ratio_train, adj_type):
             t0 = time.time()
             # Generate Train_data
             train_df = train_positives_negtives(item_pool, train_df)
-            train_data = sample_train_pair(train_df)
+            train_data = train_pair_sampling(train_df)
             train_data = PairDataset(train_data.values)
 
             # Generate Test_data
             test_df, test_user_num = test_positives_negtives(train_df, test_df)
-            test_data = TestDataSet(test_df.values)
+            test_data = AllNegtivesDataSet(test_df.values)
             
             print('Time consuming of generating train_test data:', time.time() - t0)
             print('test_user_num:{}'.format(test_user_num))
@@ -153,23 +232,19 @@ def load_data(dataset, evaluate, ratio_train, adj_type):
             item_pool = set(rt['itemId'].unique()) 
             # Generate Train_data
             train_pos_neg = train_positives_negtives(item_pool, train_df)
-            train_data = sample_train_pair(train_pos_neg)
+            train_data = train_pair_sampling(train_pos_neg)
             train_data = PairDataset(train_data.values)
             
             test_pos_neg, test_user_num = test_positives_negtives(train_pos_neg, test_df)
             # Generate Test_data
             if evaluate == 'BPR':
-                test_data = TestDataSet(test_pos_neg.values)
+                test_data = AllNegtivesDataSet(test_pos_neg.values)
             elif evaluate == 'BPR_NegSample':
 
-                test_data = sample_test_negatives(test_df, test_pos_neg)
-                test_data = TestDataSetNegSample(test_data.values)
+                test_data = test_neg_sampling(test_df, test_pos_neg)
+                test_data = SampledNegtivesDataSet(test_data.values)
             print('test_user_num:{}'.format(test_user_num))
 
-
-        
-
-    
     adj = get_adj_mat(datapath, rt, userNum, itemNum, adj_type)
 
     return train_data, test_data, userNum, itemNum, adj, test_user_num
