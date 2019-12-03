@@ -71,7 +71,7 @@ def train_pair_sampling(train_df, pos_neg):
     # sampled_batch = train_pos_neg.sample(n=len(train_pos_neg))
     # sampled_batch = train_df
     # sample pairs
-    sampled_train_pair = pd.merge(train_df, pos_neg[['userId', 'negative_items']], on='userId')
+    sampled_train_pair = pd.merge(train_df, pos_neg[['userId', 'positive_items', 'negative_items']], on='userId')
     sampled_train_pair['pos_sample'] = sampled_train_pair['positive_items'].apply(lambda x: random.sample(x, 1))
     sampled_train_pair['neg_sample'] = sampled_train_pair['negative_items'].apply(lambda x: random.sample(x, 1))
     return sampled_train_pair[['userId', 'pos_sample', 'neg_sample']]
