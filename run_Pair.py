@@ -8,7 +8,7 @@ from torch.nn import MSELoss, BCEWithLogitsLoss, DataParallel
 from torch.utils.data import DataLoader
 from torch.utils.data import random_split
 
-from data.loadPair import load_data, load_data_adj
+from data.loadPaircopy import load_data, load_data_adj
 import pandas as pd
 import numpy as np
 from numpy import diag
@@ -170,7 +170,7 @@ def main(args):
                     summaryWriter.add_scalar('metrics@{}/ndcg'.format(K), metrics['ndcg'][i], epoch)
                     summaryWriter.add_scalar('metrics@{}/auc'.format(K), metrics['auc'], epoch)
             elif args.eval_mode == 'SampledNeg':
-                HR, NDCG = eval_neg_sample(model, test_loader, 20)
+                HR, NDCG = eval_neg_sample(model, test_loader, test_user_num, 20)
                 print('epoch:{}, HR:{:5f}, NDCG:{:5f}'.format(epoch, HR, NDCG))
                 summaryWriter.add_scalar('metrics/HR', HR, epoch)
                 summaryWriter.add_scalar('metrics/NDCG', NDCG, epoch)

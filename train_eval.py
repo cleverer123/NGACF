@@ -107,7 +107,7 @@ def eval_rank(model, test_loader, lossfn, parallel, top_k):
     return np.mean(HR), np.mean(NDCG)
 
 ########################################## Eval for test data with negtive samples #################################################
-def eval_neg_sample(model, test_loader, top_k):
+def eval_neg_sample(model, test_loader, test_user_num, top_k):
     model.eval()
     HR, NDCG = [], []
     cores = multiprocessing.cpu_count() // 2
@@ -130,7 +130,7 @@ def eval_neg_sample(model, test_loader, top_k):
 
         _, indices = torch.topk(predictions, top_k, dim=1)
         # print('indices',indices.shape)
-        recommends = torch.take(itemIdxs, indices)
+        recommends = torch.take(itemIdxs.transpose(1, 0), indices)
         x = zip(pos_itemIdx.cpu().numpy(), recommends.cpu().numpy())
 
         res = pool.map(report_pos_neg, x)
@@ -143,7 +143,7 @@ def eval_neg_sample(model, test_loader, top_k):
         if batch_id % 240 == 0 :
             print("The timeStamp of evaluating batch {:03d}/{}".format(batch_id, len(test_loader)) + " is: " + time.strftime("%H: %M: %S", time.gmtime(time.time())))
     pool.close()
-    return np.mean(HR), np.mean(NDCG)
+    return np.sum(HR)/test_user_num, np.sum(NDCG)/test_user_num
 
 def report_pos_neg(x):
     pos_itemIdx, recommends = x
