@@ -32,6 +32,35 @@ def train(model, train_loader, optim, lossfn):
             
     return total_loss/len(train_loader)
 
+#####################
+def train_neg_sample(model, train_loader, optim, lossfn):
+    model.train()
+    total_loss = 0.0
+    for batch_id, (userIdx, pos_itemIdx, neg_itemIdxs) in enumerate(train_loader):
+        userIdx = userIdx.long().cuda() 
+        pos_itemIdx = pos_itemIdx.reshape(-1,1).long().cuda() # (batch_size, 1)  
+        neg_itemIdxs = torch.stack(neg_itemIdxs).transpose(1,0).long().cuda()  # (batch_size, 99) 
+        itemIdxs = torch.cat([pos_itemIdx, neg_itemIdxs], dim=1) # (batch_size, 100)
+
+        pos_labels = torch.ones_like(pos_itemIdx).float().cuda()
+        neg_labels = torch.zeros_like(neg_itemIdxs).float().cuda()
+        labels = torch.cat([pos_labels, neg_labels], dim=1)
+
+        u_Idxs = userIdx.expand(itemIdxs.shape[1], userIdx.shape[0]).transpose(1, 0).reshape(-1) #(batch_size * 100)
+        i_Idxs = itemIdxs.reshape(-1)
+        labels = labels.reshape(-1)
+
+        optim.zero_grad()
+        predictions = model(u_Idxs, i_Idxs) 
+        loss = lossfn(predictions, labels)
+        loss.sum().backward()
+        optim.step()
+        total_loss += loss.sum().item()
+        if batch_id % 60 == 0 :
+            print("The timeStamp of training batch {:03d}/{}".format(batch_id, len(train_loader)) + " is: " + time.strftime("%H: %M: %S", time.gmtime(time.time())))
+            
+    return total_loss/len(train_loader)
+
 def train_bpr(model, train_loader, optim, lossfn):
     # lossfn = BPRLoss()
     model.train()
@@ -120,8 +149,8 @@ def eval_neg_sample(model, test_loader, test_user_num, top_k):
         #          3])                i2])          tensor([i1,i3,i5])]
         userIdx = userIdx.long().cuda()     
         pos_itemIdx = pos_itemIdx.reshape(-1,1).long().cuda()  # (batch_size, 1)         
-        neg_itemIdxs = torch.stack(neg_itemIdxs).long().cuda()  # (99, batch_size)    
-        itemIdxs = torch.cat([pos_itemIdx, neg_itemIdxs.transpose(1,0)], dim=1) # (batch_size, 100)
+        neg_itemIdxs = torch.stack(neg_itemIdxs).transpose(1,0).long().cuda()  # (batch_size, 99)    
+        itemIdxs = torch.cat([pos_itemIdx, neg_itemIdxs], dim=1) # (batch_size, 100)
 
         u_Idxs = userIdx.expand(itemIdxs.shape[1], userIdx.shape[0]).transpose(1, 0).reshape(-1) #(batch_size * 100)
         i_Idxs = itemIdxs.reshape(-1)

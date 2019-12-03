@@ -101,9 +101,9 @@ def test_positives_negtives(test_df, pos_neg):
 
 def test_neg_sampling(test_df, pos_neg):
     sample_test_neg = pd.merge(test_df, pos_neg[['userId', 'negative_items']], on='userId')
-    sample_test_neg['neg_sample'] = sample_test_neg['negative_items'].apply(lambda x: random.sample(x, 99))
+    sample_test_neg['neg_samples'] = sample_test_neg['negative_items'].apply(lambda x: random.sample(x, 99))
     test_user_num = len(sample_test_neg['userId'].unique())
-    return sample_test_neg[['userId', 'itemId', 'neg_sample']], test_user_num
+    return sample_test_neg[['userId', 'itemId', 'neg_samples']], test_user_num
 
 def load_train_test_data(rt, train_df, test_df, trainMode, evalmode):
     pos_neg = positives_negtives(rt)
@@ -113,8 +113,9 @@ def load_train_test_data(rt, train_df, test_df, trainMode, evalmode):
         train_data = PairDataset(sampled_train_pair.values)          
     elif trainMode == 'NegSampling': 
         sampled_train_neg = train_neg_sampling(train_df, pos_neg)
-        neg_sample_with_label = construct_neg_samples_labels(sampled_train_neg)
-        train_data = MLDataSet(neg_sample_with_label)
+        # neg_sample_with_label = construct_neg_samples_labels(sampled_train_neg)
+        # train_data = MLDataSet(neg_sample_with_label)
+        train_data = SampledNegtivesDataSet(sampled_train_neg.values)
     # Generate test_data
     if evalmode =='AllNeg':
         test_pos_neg, test_user_num = test_positives_negtives(test_df, pos_neg)    

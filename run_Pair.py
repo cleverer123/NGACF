@@ -152,8 +152,8 @@ def main(args):
     if args.train_mode == 'PairSampling':
         from train_eval import train_bpr as train_
     elif args.train_mode == 'NegSampling':
-        from train_eval import train as train_
-    
+        # from train_eval import train as train_ train_neg_sample
+        from train_eval import train_neg_sample as train_
     for epoch in range(args.epochs):
         t0 = time.time()
         train_loss = train_(model, train_loader, optim, lossfn)
