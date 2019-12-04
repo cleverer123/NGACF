@@ -42,11 +42,14 @@ def prepareData(args):
     if args.parallel == True :
         device_count = torch.cuda.device_count()
         train_loader = DataLoader(train_data, batch_size=args.batch_size * device_count, shuffle=True,pin_memory=True)
-        test_loader = DataLoader(test_data, batch_size=args.batch_size , shuffle=False, pin_memory=False)
     else:
         train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=True,pin_memory=True)
-        test_loader = DataLoader(test_data, batch_size=args.batch_size, shuffle=False, pin_memory=False)
-    
+    # 对于test_loader，SampledNeg模式下由于多线程处理受限于系统cpu性能，test_batch_size不宜过大，AllNeg模式下则是手动加载数据
+    if args.eval_mode == 'AllNeg':
+        test_loader = test_data
+    else:
+        test_loader = DataLoader(test_data, batch_size=args.batch_size // 8, shuffle=False, pin_memory=False)
+
     return train_loader, test_loader, userNum, itemNum, adj, test_user_num
 
 

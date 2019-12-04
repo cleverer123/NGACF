@@ -107,21 +107,27 @@ def test_neg_sampling(test_df, pos_neg):
 
 def load_train_test_data(rt, train_df, test_df, trainMode, evalmode):
     pos_neg = positives_negtives(rt)
+    print('-----------------All data. pos_neg ----------------- \n',pos_neg.head(3))
     # Generate train_data
     if trainMode == 'PairSampling': # 一行 代表 user的 一个 pos_item 和 一个 neg_item 
         sampled_train_pair = train_pair_sampling(train_df, pos_neg)
+        print('-----------------trainMode == PairSampling. sampled_train_pair ----------------- \n', sampled_train_pair.head(3))
         train_data = PairDataset(sampled_train_pair.values)          
     elif trainMode == 'NegSampling': # 一行 代表 user的 一个 pos_item 和 所有 neg_items
         sampled_train_neg = train_neg_sampling(train_df, pos_neg)
         # neg_sample_with_label = construct_neg_samples_labels(sampled_train_neg)
         # train_data = MLDataSet(neg_sample_with_label)
+        print('-----------------trainMode == NegSampling. sampled_train_neg ----------------- \n', sampled_train_neg.head(3))
         train_data = SampledNegtivesDataSet(sampled_train_neg.values)
     # Generate test_data
     if evalmode =='AllNeg': # 一行 代表 user的 所有 pos_items 和 所有 neg_items
-        test_pos_neg, test_user_num = test_positives_negtives(test_df, pos_neg)    
-        test_data = AllNegtivesDataSet(test_pos_neg.values)
+        test_pos_neg, test_user_num = test_positives_negtives(test_df, pos_neg)   
+        print('-----------------evalmode ==AllNeg. test_pos_neg: -----------------\n', test_pos_neg.head(3)) 
+        # test_data = AllNegtivesDataSet(test_pos_neg.values)
+        test_data = test_pos_neg
     elif evalmode == 'SampledNeg': # 一行 代表 user的 一个 pos_item 和 所有 neg_items
         sampled_test_neg, test_user_num = test_neg_sampling(test_df, pos_neg)
+        print('-----------------evalmode == SampledNeg. sampled_test_neg ----------------- \n', sampled_test_neg.head(3))
         test_data = SampledNegtivesDataSet(sampled_test_neg.values)
     print('Size of train_data:{} test_data:{}'.format(len(train_data), len(test_data)))
     return train_data, test_data, test_user_num

@@ -108,7 +108,8 @@ def load_train_test_data(rt, train_df, test_df, trainMode, evalmode):
     # Generate test_data
     test_pos_neg, test_user_num = test_positives_negtives(test_df, train_pos_neg)    
     if evalmode =='AllNeg':
-        test_data = AllNegtivesDataSet(test_pos_neg.values)
+        # test_data = AllNegtivesDataSet(test_pos_neg.values)
+        test_data = test_pos_neg
     elif evalmode == 'SampledNeg':
         sampled_test_neg = test_neg_sampling(test_df, test_pos_neg)
         test_data = SampledNegtivesDataSet(sampled_test_neg.values)

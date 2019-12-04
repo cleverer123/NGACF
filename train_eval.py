@@ -192,7 +192,7 @@ def report_pos_neg(x):
 
 
 ########################################## Eval for test data with all negatives #################################################
-def eval_neg_all(model, test_loader, test_user_num, itemNum, is_parallel):
+def eval_neg_all(model, test_data, test_user_num, itemNum, is_parallel):
     model.eval()
     Ks = [10,20]
     result = {'precision': np.zeros(len(Ks)), 'recall': np.zeros(len(Ks)), 'ndcg': np.zeros(len(Ks)),
@@ -205,10 +205,26 @@ def eval_neg_all(model, test_loader, test_user_num, itemNum, is_parallel):
     item_batch_size = 1000
     item_loader = DataLoader(ItemDataSet(np.arange(itemNum)), batch_size=item_batch_size, shuffle=False, pin_memory=False)
     
-    for batch_id, (userIdx, pos_itemIdxs, neg_itemIdxs) in enumerate(test_loader):
+    user_batch_size = 2048 // 8
+    n_user_batchs = test_user_num // user_batch_size + 1
+
+    # 手动加载 test_data. dataframe: ['userId', 'positive_items', 'negative_items']]
+    for batch_id in range(n_user_batchs):
+        start = batch_id * user_batch_size
+        end = (batch_id + 1) * user_batch_size
+        if end > test_user_num:
+            end = test_user_num
+        batch_data = test_data.iloc[start:end]
+
+        userIdx = torch.tensor(batch_data['userId'].values)
+        pos_itemIdxs = batch_data['positive_items'].values
+        neg_itemIdxs = batch_data['negative_items'].values
+
+    # for batch_id, (userIdx, pos_itemIdxs, neg_itemIdxs) in enumerate(test_loader):
         # userIdx = userIdx.long().cuda() # (user_batch_size)
-        pos_itemIdxs = torch.stack(pos_itemIdxs).transpose(1,0)  # (user_batch_size, posize) 
-        neg_itemIdxs = torch.stack(neg_itemIdxs).transpose(1,0)  # (user_batch_size, negsize) 
+
+        # pos_itemIdxs = torch.stack(pos_itemIdxs).transpose(1,0)  # (user_batch_size, posize) 
+        # neg_itemIdxs = torch.stack(neg_itemIdxs).transpose(1,0)  # (user_batch_size, negsize) 
         
         batch_ratings = []
         for _, itemIdx in enumerate(item_loader):
@@ -235,7 +251,7 @@ def eval_neg_all(model, test_loader, test_user_num, itemNum, is_parallel):
         batch_metrics = pool.map(report_one_user, user_batch_ratings)
         
         if batch_id % 240 == 0 :
-            print("-----------The timeStamp of test batch {:03d}/{}".format(batch_id, len(test_loader)) + " is: " + time.strftime("%H: %M: %S", time.gmtime(time.time())))
+            print("-----------The timeStamp of test batch {:03d}/{}".format(batch_id, n_user_batchs) + " is: " + time.strftime("%H: %M: %S", time.gmtime(time.time())))
         
         for re in batch_metrics:
             result['precision'] += re['precision']/test_user_num
@@ -247,68 +263,11 @@ def eval_neg_all(model, test_loader, test_user_num, itemNum, is_parallel):
     pool.close()
     return result   
 
-
-# def eval_bpr_sigmoid(model, test_loader, test_user_num, itemNum, isparalell):
-#     model.eval()
-#     Ks = [10,20]
-#     result = {'precision': np.zeros(len(Ks)), 'recall': np.zeros(len(Ks)), 'ndcg': np.zeros(len(Ks)),
-#               'hit_ratio': np.zeros(len(Ks)), 'auc': 0.}
-
-#     cores = multiprocessing.cpu_count() // 2
-#     # print('multiprocessing.cpu_count()', cores)
-#     pool = multiprocessing.Pool(cores)
-
-#     item_batch_size = 5000
-
-#     if isparalell:
-#         device_count = torch.cuda.device_count()
-#         item_loader = DataLoader(ItemDataSet(np.arange(itemNum)), batch_size=item_batch_size * device_count, shuffle=False, pin_memory=False)
-#     else:
-#         item_loader = DataLoader(ItemDataSet(np.arange(itemNum)), batch_size=item_batch_size, shuffle=False, pin_memory=False)
-#     several_ratings_to_eval = []
-#     for test_batch_idx, (user_batch, positive_items, negative_items) in enumerate(test_loader):
-#         # print(user_batch, positive_items, negative_items)
-#         # store ratings for paticular user: u. 
-#         u_ratings = []
-#         if isparalell and torch.cuda.device_count()>1:
-#             pass
-#         else:
-#             u = user_batch.long().cuda()
-#             for _, item_batch in enumerate(item_loader):
-#                 u_idxs = torch.full_like(item_batch, u.item())
-#                 i_idxs = item_batch.long().cuda()
-#                 item_batch_ratings = model(u_idxs, i_idxs)
-#                 u_ratings.append(item_batch_ratings.detach().cpu().numpy())
-#             u_ratings = np.concatenate(u_ratings, axis=0) # (1, Item_num)
-#         several_ratings_to_eval.append((u_ratings, positive_items, negative_items))
-        
-#         if (test_batch_idx + 1) % 5000 == 0:
-#             batch_metrics = pool.map(report_one_user, several_ratings_to_eval)
-#             for re in batch_metrics:
-#                 result['precision'] += re['precision']/test_user_num
-#                 result['recall'] += re['recall']/test_user_num
-#                 result['ndcg'] += re['ndcg']/test_user_num
-#                 result['hit_ratio'] += re['hit_ratio']/test_user_num
-#                 result['auc'] += re['auc']/test_user_num
-#                 several_ratings_to_eval = []
-#     # deal with last batch
-#     if len(several_ratings_to_eval) :
-#         batch_metrics = pool.map(report_one_user, several_ratings_to_eval)
-#         for re in batch_metrics:
-#             result['precision'] += re['precision']/test_user_num
-#             result['recall'] += re['recall']/test_user_num
-#             result['ndcg'] += re['ndcg']/test_user_num
-#             result['hit_ratio'] += re['hit_ratio']/test_user_num
-#             result['auc'] += re['auc']/test_user_num
-
-#     pool.close()
-#     return result   
-
-
 def report_one_user(x):
     Ks = [10, 20]
     # user u's ratings for user u, 
     ratings, positive_items, negative_items = x
+    
     r, auc = ranklist_by_heapq(list(positive_items), list(negative_items), list(ratings), Ks)
     # if args.test_flag == 'part':
     #     r, auc = ranklist_by_heapq(list(positive_items), list(negative_items), ratings, Ks)
