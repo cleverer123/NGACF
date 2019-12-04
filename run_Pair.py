@@ -1,4 +1,5 @@
 import os
+import ast
 import time
 import argparse 
 import torch
@@ -28,7 +29,7 @@ from graphattention.BPRLoss import BPRLoss
 
 from train_eval import eval_neg_sample, eval_neg_all
 
-from parallel import DataParallelModel, DataParallelCriterion
+from parallel import DataParallelModel, DataParallelCriterion, DataParallelCriterion2
 
 CUDA_LAUNCH_BLOCKING=1
 
@@ -41,7 +42,7 @@ def prepareData(args):
     if args.parallel == True :
         device_count = torch.cuda.device_count()
         train_loader = DataLoader(train_data, batch_size=args.batch_size * device_count, shuffle=True,pin_memory=True)
-        test_loader = DataLoader(test_data, batch_size=args.batch_size * device_count, shuffle=False, pin_memory=False)
+        test_loader = DataLoader(test_data, batch_size=args.batch_size , shuffle=False, pin_memory=False)
     else:
         train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=True,pin_memory=True)
         test_loader = DataLoader(test_data, batch_size=args.batch_size, shuffle=False, pin_memory=False)
@@ -69,7 +70,9 @@ def createModels(args, userNum, itemNum, adj):
 
     if args.train_mode == 'PairSampling':
         lossfn = BPRLoss()
-        # 该模式下数据加载方式暂不支持并行
+        if args.parallel == True :
+            model = DataParallelModel(model)    
+            lossfn = DataParallelCriterion2(lossfn)
     elif args.train_mode == 'NegSampling':
         lossfn = BCEWithLogitsLoss()
         if args.parallel == True :
@@ -162,7 +165,7 @@ def main(args):
         if (epoch+1) % args.eval_every == 0 :
             t0 = time.time()
             if args.eval_mode == 'AllNeg':
-                metrics = eval_neg_all(model, test_loader, test_user_num, itemNum)
+                metrics = eval_neg_all(model, test_loader, test_user_num, itemNum, args.parallel)
                 print('epoch:{} metrics:{}'.format(epoch, metrics))
                 for i, K in enumerate([10,20]):
                     summaryWriter.add_scalar('metrics@{}/precision'.format(K), metrics['precision'][i], epoch)
@@ -195,11 +198,14 @@ if __name__ == "__main__":
     parser.add_argument("--layers", type=list, default=[64,64], help="the layer list for propagation")
     parser.add_argument("--train_mode", type=str, default="NegSampling", help="the mode to train model [PairSampling, NegSampling]")
     parser.add_argument("--eval_mode", type=str, default="SampledNeg", help="the mode for evaluate[AllNeg, SampledNeg]")
-    parser.add_argument("--parallel", type=bool, default=False, help="whether to use parallel model")
+    parser.add_argument("--parallel", type=ast.literal_eval, default=False, help="whether to use parallel model, input should be either 'True' or 'False'.")
     args = parser.parse_args()
     if args.parallel:
-        os.environ["CUDA_VISIBLE_DEVICES"] = '0, 1' 
-    os.environ["CUDA_VISIBLE_DEVICES"] = '0' 
+        print('----------------Parallel Mode is enabled----------------')
+        os.environ["CUDA_VISIBLE_DEVICES"] = '0, 1, 2' 
+    else:
+        print('----------------Parallel Mode is disabled.----------------')
+        os.environ["CUDA_VISIBLE_DEVICES"] = '0' 
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
     main(args)

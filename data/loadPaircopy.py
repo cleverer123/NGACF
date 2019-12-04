@@ -108,19 +108,19 @@ def test_neg_sampling(test_df, pos_neg):
 def load_train_test_data(rt, train_df, test_df, trainMode, evalmode):
     pos_neg = positives_negtives(rt)
     # Generate train_data
-    if trainMode == 'PairSampling':
+    if trainMode == 'PairSampling': # 一行 代表 user的 一个 pos_item 和 一个 neg_item 
         sampled_train_pair = train_pair_sampling(train_df, pos_neg)
         train_data = PairDataset(sampled_train_pair.values)          
-    elif trainMode == 'NegSampling': 
+    elif trainMode == 'NegSampling': # 一行 代表 user的 一个 pos_item 和 所有 neg_items
         sampled_train_neg = train_neg_sampling(train_df, pos_neg)
         # neg_sample_with_label = construct_neg_samples_labels(sampled_train_neg)
         # train_data = MLDataSet(neg_sample_with_label)
         train_data = SampledNegtivesDataSet(sampled_train_neg.values)
     # Generate test_data
-    if evalmode =='AllNeg':
+    if evalmode =='AllNeg': # 一行 代表 user的 所有 pos_items 和 所有 neg_items
         test_pos_neg, test_user_num = test_positives_negtives(test_df, pos_neg)    
         test_data = AllNegtivesDataSet(test_pos_neg.values)
-    elif evalmode == 'SampledNeg':
+    elif evalmode == 'SampledNeg': # 一行 代表 user的 一个 pos_item 和 所有 neg_items
         sampled_test_neg, test_user_num = test_neg_sampling(test_df, pos_neg)
         test_data = SampledNegtivesDataSet(sampled_test_neg.values)
     print('Size of train_data:{} test_data:{}'.format(len(train_data), len(test_data)))

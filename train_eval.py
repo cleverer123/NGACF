@@ -7,7 +7,6 @@ import multiprocessing
 import heapq
 import graphattention.metrics as metrics
 from graphattention.BPRLoss import BPRLoss
-from parallel import DataParallelCriterion2
 ############################################ Train ####################################################
 def train(model, train_loader, optim, lossfn):
     
@@ -28,7 +27,7 @@ def train(model, train_loader, optim, lossfn):
         optim.step()
         total_loss += loss.sum().item()
         if batch_id % 60 == 0 :
-            print("The timeStamp of training batch {:03d}/{}".format(batch_id, len(train_loader)) + " is: " + time.strftime("%H: %M: %S", time.gmtime(time.time())))
+            print("-----------The timeStamp of training batch {:03d}/{}".format(batch_id, len(train_loader)) + " is: " + time.strftime("%H: %M: %S", time.gmtime(time.time())))
             
     return total_loss/len(train_loader)
 
@@ -57,7 +56,7 @@ def train_neg_sample(model, train_loader, optim, lossfn):
         optim.step()
         total_loss += loss.sum().item()
         if batch_id % 60 == 0 :
-            print("The timeStamp of training batch {:03d}/{}".format(batch_id, len(train_loader)) + " is: " + time.strftime("%H: %M: %S", time.gmtime(time.time())))
+            print("-----------The timeStamp of training batch {:03d}/{}".format(batch_id, len(train_loader)) + " is: " + time.strftime("%H: %M: %S", time.gmtime(time.time())))
             
     return total_loss/len(train_loader)
 
@@ -78,14 +77,14 @@ def train_bpr(model, train_loader, optim, lossfn):
         neg_scores = model(user_idxs, neg_item_idxs)
         
         loss = lossfn(pos_scores, neg_scores)
-        loss.backward()
+        # loss.backward()
         # # Ref: https://discuss.pytorch.org/t/is-the-loss-function-paralleled-when-using-dataparallel/3346/5
-        # loss.backward(torch.ones(torch.cuda.device_count()).cuda())
+        loss.backward(torch.ones(torch.cuda.device_count()).cuda())
         optim.step()
-        # total_loss += loss.sum().item()
-        total_loss += loss.item()
+        total_loss += loss.sum().item()
+        # total_loss += loss.item()
         if batch_id % 60 == 0 :
-            print("The timeStamp of training batch {:03d}/{}".format(batch_id, len(train_loader)) + " is: " + time.strftime("%H: %M: %S", time.gmtime(time.time())))
+            print("-----------The timeStamp of training batch {:03d}/{}".format(batch_id, len(train_loader)) + " is: " + time.strftime("%H: %M: %S", time.gmtime(time.time())))
             
     return total_loss/len(train_loader)
 
@@ -130,7 +129,7 @@ def eval_rank(model, test_loader, lossfn, parallel, top_k):
         
         
         if batch_id % 240 == 0 :
-            print("The timeStamp of evaluating batch {:03d}/{}".format(batch_id, len(test_loader)) + " is: " + time.strftime("%H: %M: %S", time.gmtime(time.time())))
+            print("-----------The timeStamp of evaluating batch {:03d}/{}".format(batch_id, len(test_loader)) + " is: " + time.strftime("%H: %M: %S", time.gmtime(time.time())))
            
 
     return np.mean(HR), np.mean(NDCG)
@@ -144,9 +143,9 @@ def eval_neg_sample(model, test_loader, test_user_num, top_k, is_parallel):
     for batch_id, (userIdx, pos_itemIdx, neg_itemIdxs) in enumerate(test_loader):
         # test_loader data structue :
         #    userIdx             pos_itemIdxs        neg_itemIdxs(neg_sample_size=3)
-        #  tensor([1,         tensor([i1,          [tensor([i2,i4,i5]), 
-        #          1,                 i3,           tensor([i2,i4,i5]),
-        #          3])                i2])          tensor([i1,i3,i5])]
+        #  tensor([1,         tensor([i1,         [tensor([i2,  tensor([i4,   tensor([i5,
+        #          1,                 i3,                  i2,          i4,           i5,
+        #          3])                i2])                 i1]),        i3]),         i5])]
         # userIdx = userIdx.long().cuda()     
         pos_itemIdx = pos_itemIdx.reshape(-1,1)  # (batch_size, 1)         
         neg_itemIdxs = torch.stack(neg_itemIdxs).transpose(1,0)  # (batch_size, 99)    
@@ -154,8 +153,8 @@ def eval_neg_sample(model, test_loader, test_user_num, top_k, is_parallel):
 
         u_Idxs = userIdx.expand(itemIdxs.shape[1], userIdx.shape[0]).transpose(1, 0).reshape(-1).long().cuda() #(batch_size * 100)
         i_Idxs = itemIdxs.reshape(-1).long().cuda()
-        predictions = model(u_Idxs, i_Idxs)
-        
+        predictions = model(u_Idxs, i_Idxs)        
+        # 并行化处理
         if is_parallel and torch.cuda.device_count()>1:
             l = []
             for prediction in predictions:
@@ -176,7 +175,7 @@ def eval_neg_sample(model, test_loader, test_user_num, top_k, is_parallel):
         NDCG.extend(res[:,1].tolist())
         
         if batch_id % 240 == 0 :
-            print("The timeStamp of evaluating batch {:03d}/{}".format(batch_id, len(test_loader)) + " is: " + time.strftime("%H: %M: %S", time.gmtime(time.time())))
+            print("-----------The timeStamp of evaluating batch {:03d}/{}".format(batch_id, len(test_loader)) + " is: " + time.strftime("%H: %M: %S", time.gmtime(time.time())))
     pool.close()
     return np.mean(HR), np.mean(NDCG)
 
@@ -192,8 +191,8 @@ def report_pos_neg(x):
     return hit(pos_itemIdx, recommends), ndcg(pos_itemIdx, recommends) 
 
 
-########################################## Eval for test data with all negtive #################################################
-def eval_neg_all(model, test_loader, test_user_num, itemNum):
+########################################## Eval for test data with all negatives #################################################
+def eval_neg_all(model, test_loader, test_user_num, itemNum, is_parallel):
     model.eval()
     Ks = [10,20]
     result = {'precision': np.zeros(len(Ks)), 'recall': np.zeros(len(Ks)), 'ndcg': np.zeros(len(Ks)),
@@ -207,24 +206,36 @@ def eval_neg_all(model, test_loader, test_user_num, itemNum):
     item_loader = DataLoader(ItemDataSet(np.arange(itemNum)), batch_size=item_batch_size, shuffle=False, pin_memory=False)
     
     for batch_id, (userIdx, pos_itemIdxs, neg_itemIdxs) in enumerate(test_loader):
-        userIdx = userIdx.long().cuda()
+        # userIdx = userIdx.long().cuda() # (user_batch_size)
+        pos_itemIdxs = torch.stack(pos_itemIdxs).transpose(1,0)  # (user_batch_size, posize) 
+        neg_itemIdxs = torch.stack(neg_itemIdxs).transpose(1,0)  # (user_batch_size, negsize) 
+        
         batch_ratings = []
         for _, itemIdx in enumerate(item_loader):
-            itemIdx = itemIdx.long().cuda()
-            u_Idxs = userIdx.expand(itemIdx.shape[0], userIdx.shape[0]).transpose(1, 0).reshape(-1)
-            i_Idxs = itemIdx.expand(userIdx.shape[0], itemIdx.shape[0]).reshape(-1)
+            # itemIdx = itemIdx.long().cuda()
+            u_Idxs = userIdx.expand(itemIdx.shape[0], userIdx.shape[0]).transpose(1, 0).reshape(-1).long().cuda() # (user_batch_size * item_batch_size)
+            i_Idxs = itemIdx.expand(userIdx.shape[0], itemIdx.shape[0]).reshape(-1).long().cuda() # (user_batch_size * item_batch_size)
 
             item_batch_ratings = model(u_Idxs, i_Idxs)
-            item_batch_ratings = item_batch_ratings.reshape(userIdx.shape[0], itemIdx.shape[0])
+            # 并行处理
+            if is_parallel and torch.cuda.device_count()>1:
+                l = []
+                for item_batch_rating in item_batch_ratings:
+                    l.append(item_batch_rating.detach().cpu())
+                item_batch_ratings = torch.cat(l, dim=0)
+            else:
+                item_batch_ratings = item_batch_ratings.detach().cpu()
 
-            batch_ratings.append(item_batch_ratings.detach().cpu().numpy())
+            item_batch_ratings = item_batch_ratings.reshape(userIdx.shape[0], itemIdx.shape[0]) # (user_batch_size, item_batch_size)
+            batch_ratings.append(item_batch_ratings.numpy())
+
         batch_ratings = np.concatenate(batch_ratings, axis=1) # (user_batch_size, Item_num)
-
+        # print('batch_ratings', batch_ratings.shape)
         user_batch_ratings = zip(batch_ratings, pos_itemIdxs, neg_itemIdxs)
         batch_metrics = pool.map(report_one_user, user_batch_ratings)
         
         if batch_id % 240 == 0 :
-            print("The timeStamp of test batch {:03d}/{}".format(batch_id, len(test_loader)) + " is: " + time.strftime("%H: %M: %S", time.gmtime(time.time())))
+            print("-----------The timeStamp of test batch {:03d}/{}".format(batch_id, len(test_loader)) + " is: " + time.strftime("%H: %M: %S", time.gmtime(time.time())))
         
         for re in batch_metrics:
             result['precision'] += re['precision']/test_user_num
