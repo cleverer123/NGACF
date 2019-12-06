@@ -171,7 +171,7 @@ def eval_neg_sample(model, test_loader, test_user_num, top_k, is_parallel):
 
         res = np.array(res)
         
-        HR.extend(res[:].tolist())
+        HR.extend(res[:,0].tolist())
         NDCG.extend(res[:,1].tolist())
         
         if batch_id % 240 == 0 :
@@ -246,7 +246,6 @@ def eval_neg_all(model, test_data, test_user_num, itemNum, is_parallel):
             batch_ratings.append(item_batch_ratings.numpy())
 
         batch_ratings = np.concatenate(batch_ratings, axis=1) # (user_batch_size, Item_num)
-        # print('batch_ratings', batch_ratings.shape)
         user_batch_ratings = zip(batch_ratings, pos_itemIdxs, neg_itemIdxs)
         batch_metrics = pool.map(report_one_user, user_batch_ratings)
         
