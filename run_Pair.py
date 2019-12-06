@@ -22,7 +22,7 @@ from graphattention.GACFmodel4 import GACFV4
 from graphattention.GACFmodel5 import GACFV5, GACFV5_BPR
 from graphattention.GACFmodel6 import GACFV6
 
-from graphattention.GCFmodel import  GCF, GCF_BPR
+from graphattention.GCFmodel import  GCF, GCF_MF
 # from graphattention.GCFmodel import SVD
 from graphattention.GCFmodel import NCF
 from graphattention.BPRLoss import BPRLoss
@@ -174,6 +174,7 @@ def main(args):
                     summaryWriter.add_scalar('metrics@{}/precision'.format(K), metrics['precision'][i], epoch)
                     summaryWriter.add_scalar('metrics@{}/recall'.format(K), metrics['recall'][i], epoch)
                     summaryWriter.add_scalar('metrics@{}/ndcg'.format(K), metrics['ndcg'][i], epoch)
+                    summaryWriter.add_scalar('metrics@{}/hit_ratio'.format(K), metrics['hit_ratio'], epoch)
                     summaryWriter.add_scalar('metrics@{}/auc'.format(K), metrics['auc'], epoch)
             elif args.eval_mode == 'SampledNeg':
                 HR, NDCG = eval_neg_sample(model, test_loader, test_user_num, 10, args.parallel)
