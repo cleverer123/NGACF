@@ -86,11 +86,11 @@ class GNNLayer(Module):
         return inter_part1+inter_part2
 
 
-class GCF_BPR(Module):
+class GCF_MF(Module):
 
     def __init__(self,userNum,itemNum,adj,embedSize=100,layers=[100,80,50],useCuda=True):
 
-        super(GCF_BPR,self).__init__()
+        super(GCF_MF,self).__init__()
         self.useCuda = useCuda
         self.userNum = userNum
         self.itemNum = itemNum
@@ -101,9 +101,9 @@ class GCF_BPR(Module):
         self.leakyRelu = nn.LeakyReLU()
         self.selfLoop = self.getSparseEye(self.userNum+self.itemNum)
 
-        self.transForm1 = nn.Linear(in_features=sum(layers)*2, out_features=64)
-        self.transForm2 = nn.Linear(in_features=64,out_features=32)
-        self.transForm3 = nn.Linear(in_features=32,out_features=1)
+        # self.transForm1 = nn.Linear(in_features=sum(layers)*2, out_features=64)
+        # self.transForm2 = nn.Linear(in_features=64,out_features=32)
+        # self.transForm3 = nn.Linear(in_features=32,out_features=1)
 
         for From,To in zip(layers[:-1],layers[1:]):
             self.GNNlayers.append(GNNLayer(From,To))
@@ -114,14 +114,14 @@ class GCF_BPR(Module):
         nn.init.normal_(self.uEmbd.weight, std=0.01)
         nn.init.normal_(self.iEmbd.weight, std=0.01)
 
-        nn.init.xavier_uniform_(self.transForm1.weight)
-        self.transForm1.bias.data.zero_()
+        # nn.init.xavier_uniform_(self.transForm1.weight)
+        # self.transForm1.bias.data.zero_()
 
-        nn.init.xavier_uniform_(self.transForm2.weight)
-        self.transForm2.bias.data.zero_()
+        # nn.init.xavier_uniform_(self.transForm2.weight)
+        # self.transForm2.bias.data.zero_()
 
-        nn.init.xavier_uniform_(self.transForm3.weight)
-        self.transForm3.bias.data.zero_()
+        # nn.init.xavier_uniform_(self.transForm3.weight)
+        # self.transForm3.bias.data.zero_()
 
     def getSparseEye(self,num):
         i = torch.LongTensor([[k for k in range(0,num)],[j for j in range(0,num)]])
@@ -170,13 +170,15 @@ class GCF_BPR(Module):
         itemIdx = itemIdx + self.userNum
         userEmbd = self.finalEmbd[userIdx]
         itemEmbd = self.finalEmbd[itemIdx]
+
+        return torch.sum(userEmbd * itemEmbd, dim=1)
         
-        embd = torch.cat([userEmbd,itemEmbd],dim=1)
-        embd = nn.ReLU()(self.transForm1(embd))
-        embd = nn.ReLU()(self.transForm2(embd))
-        embd = self.transForm3(embd)
-        prediction = embd.flatten()
-        return prediction
+        # embd = torch.cat([userEmbd,itemEmbd],dim=1)
+        # embd = nn.ReLU()(self.transForm1(embd))
+        # embd = nn.ReLU()(self.transForm2(embd))
+        # embd = self.transForm3(embd)
+        # prediction = embd.flatten()
+        # return prediction
 
 class GCF(Module):
 

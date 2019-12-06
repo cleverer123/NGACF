@@ -33,7 +33,7 @@ class GPLayer(Module):
 
 class GACFV2(Module):
 
-    def __init__(self,userNum,itemNum,rt,embedSize=256,layers=[256,128,64], droprate=0.2, useCuda=True):
+    def __init__(self,userNum,itemNum,adj,embedSize=256,layers=[256,128,64], droprate=0.2, useCuda=True):
 
         super(GACFV2, self).__init__()
         self.useCuda = useCuda
@@ -47,7 +47,7 @@ class GACFV2(Module):
         self.GPlayers = torch.nn.ModuleList()
         self.Affinelayers = torch.nn.ModuleList()
                 
-        self.LaplacianMat = self.buildLaplacianMat(rt) # sparse format
+        self.LaplacianMat = adj  
         self.leakyRelu = nn.LeakyReLU()
         self.selfLoop = self.getSparseEye(self.userNum+self.itemNum)
 
