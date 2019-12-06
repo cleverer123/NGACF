@@ -142,11 +142,15 @@ def load_data_adj(dataset, ratio_train, adj_type, trainMode, evalmode):
         rt['userId'] = rt['userId'] - 1
         rt['itemId'] = rt['itemId'] - 1
         print('userNum:{}, itemNum:{}'.format(userNum, itemNum))
-        train_df, test_df = loadML1m()
-        train_df['userId'] = train_df['userId'] - 1
-        train_df['itemId'] = train_df['itemId'] - 1
-        test_df['userId'] = test_df['userId'] - 1
-        test_df['itemId'] = test_df['itemId'] - 1
+        # # split random
+        # train_df, test_df = loadML1m()
+        # train_df['userId'] = train_df['userId'] - 1
+        # train_df['itemId'] = train_df['itemId'] - 1
+        # test_df['userId'] = test_df['userId'] - 1
+        # test_df['itemId'] = test_df['itemId'] - 1
+        
+        # # split by leave one out  
+        train_df, test_df = split_loo(rt)
 
     elif dataset == 'ml100k':
         datapath = path.dirname(__file__) + '/1K'
