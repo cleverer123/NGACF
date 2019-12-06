@@ -41,7 +41,7 @@ class GALayer(Module):
 
 class GACFV3(Module):
 
-    def __init__(self,userNum,itemNum,rt,embedSize=256,layers=[256,128,64], droprate=0.2, useCuda=True):
+    def __init__(self,userNum,itemNum,adj,embedSize=256,layers=[256,128,64], droprate=0.2, useCuda=True):
 
         super(GACFV3,self).__init__()
         self.useCuda = useCuda
@@ -54,7 +54,7 @@ class GACFV3(Module):
         self.GALayers = torch.nn.ModuleList()
         
                 
-        self.LaplacianMat = self.buildLaplacianMat(rt) # sparse format
+        self.LaplacianMat = adj # sparse format
         self.leakyRelu = nn.LeakyReLU()
         self.selfLoop = self.getSparseEye(self.userNum+self.itemNum)
 
