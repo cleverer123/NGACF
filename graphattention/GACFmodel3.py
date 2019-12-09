@@ -32,18 +32,90 @@ class GALayer(Module):
 
         L1 = laplacianMat + selfLoop
         L1 = L1.cuda()
-        feature1 = self.affine1(torch.sparse.mm(L1,features))
+        feature1 = nn.ReLU()(self.affine1(torch.sparse.mm(L1,features)))
 
         L2 = laplacianMat.cuda()
         # inter_feature = torch.mul(features,features)
-        feature2 = self.affine2(torch.sparse.mm(L2, features))
+        feature2 = nn.ReLU()(self.affine2(torch.sparse.mm(L2, features)))
         return feature1 + feature2
 
+
+
+class GACFV3_layer(Module):
+# concat matrix factorization output
+    def __init__(self,userNum,itemNum,adj,embedSize,layers, droprate=0.2, useCuda=True):
+
+        super(GACFV3_layer,self).__init__()
+        self.useCuda = useCuda
+        self.userNum = userNum
+        self.itemNum = itemNum
+        self.droprate = droprate
+        self.uEmbd = nn.Embedding(userNum,embedSize)
+        self.iEmbd = nn.Embedding(itemNum,embedSize)
+
+        self.GALayers = torch.nn.ModuleList()
+        
+        self.LaplacianMat = adj # sparse format
+        self.leakyRelu = nn.LeakyReLU()
+        self.selfLoop = self.getSparseEye(self.userNum+self.itemNum)
+
+
+        for From,To in zip(layers[:-1],layers[1:]):
+            self.GALayers.append(GALayer(From, To, 8, self.droprate))
+        
+        self._init_weight_()
+
+    def _init_weight_(self):
+        nn.init.normal_(self.uEmbd.weight, std=0.01)
+        nn.init.normal_(self.iEmbd.weight, std=0.01)
+    
+    def getSparseEye(self,num):
+        i = torch.LongTensor([[k for k in range(0,num)],[j for j in range(0,num)]])
+        val = torch.FloatTensor([1]*num)
+        return torch.sparse.FloatTensor(i,val)
+
+    def getFeatureMat(self):
+        uidx = torch.LongTensor([i for i in range(self.userNum)])
+        iidx = torch.LongTensor([i for i in range(self.itemNum)])
+        if self.useCuda == True:
+            uidx = uidx.cuda()
+            iidx = iidx.cuda()
+
+        userEmbd = self.uEmbd(uidx)
+        itemEmbd = self.iEmbd(iidx)
+        features = torch.cat([userEmbd,itemEmbd],dim=0)
+        return uidx, iidx + self.userNum , features
+       
+    def forward(self, userIdx, itemIdx):
+        uidx, iidx, features = self.getFeatureMat()
+        finalEmbd = features.clone()
+        for ga in self.GALayers:
+            userFeatures, itemFeatures = features[uidx], features[iidx]
+            features = ga(userFeatures, itemFeatures, self.LaplacianMat, self.selfLoop)
+            finalEmbd = torch.cat([finalEmbd, features.clone()],dim=1)
+
+        return finalEmbd        
+        
 class GACFV3(Module):
+    def __init__(self, userNum,itemNum,adj,embedSize,layers,droprate):
+        super(GACFV3, self).__init__()
+        self.userNum = userNum
+        self.gacf = GACFV3_layer(userNum,itemNum,adj,embedSize,layers,droprate)
+
+    def forward(self, userIdx, itemIdx):
+        gacf_embd = self.gacf(userIdx, itemIdx)
+
+        itemIdx = itemIdx + self.userNum
+        userEmbd = gacf_embd[userIdx]
+        itemEmbd = gacf_embd[itemIdx]
+
+        return torch.sum(userEmbd * itemEmbd, dim=1)
+
+class GACFV3x(Module):
 
     def __init__(self,userNum,itemNum,adj,embedSize=256,layers=[256,128,64], droprate=0.2, useCuda=True):
 
-        super(GACFV3,self).__init__()
+        super(GACFV3x,self).__init__()
         self.useCuda = useCuda
         self.userNum = userNum
         self.itemNum = itemNum
@@ -103,7 +175,7 @@ class GACFV3(Module):
         for ga in self.GALayers:
 
             userFeatures, itemFeatures = features[uidx], features[iidx]
-            features = ga(userFeatures, itemFeatures, self.LaplacianMat, self.selfLoop)
+            features = nn.ReLU()(ga(userFeatures, itemFeatures, self.LaplacianMat, self.selfLoop))
 
             finalEmbd = torch.cat([finalEmbd, features.clone()],dim=1)
 
@@ -122,32 +194,7 @@ class GACFV3(Module):
 
         return prediction        
         
-
     def getSparseEye(self,num):
         i = torch.LongTensor([[k for k in range(0,num)],[j for j in range(0,num)]])
         val = torch.FloatTensor([1]*num)
         return torch.sparse.FloatTensor(i,val)
-
-    def buildLaplacianMat(self,rt):
-
-        rt_item = rt['itemId'] + self.userNum
-        uiMat = coo_matrix((rt['rating'], (rt['userId'], rt['itemId'])))
-
-        uiMat_upperPart = coo_matrix((rt['rating'], (rt['userId'], rt_item)))
-        uiMat = uiMat.transpose()
-        uiMat.resize((self.itemNum, self.userNum + self.itemNum))
-
-        A = sparse.vstack([uiMat_upperPart,uiMat])
-        selfLoop = sparse.eye(self.userNum+self.itemNum)
-        sumArr = (A>0).sum(axis=1)
-        diag = list(np.array(sumArr.flatten())[0])
-        diag = np.power(diag,-0.5)
-        D = sparse.diags(diag)
-        L = D * A * D
-        L = sparse.coo_matrix(L)
-        row = L.row
-        col = L.col
-        i = torch.LongTensor([row,col])
-        data = torch.FloatTensor(L.data)
-        SparseL = torch.sparse.FloatTensor(i,data)
-        return SparseL

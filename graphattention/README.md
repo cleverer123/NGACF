@@ -10,7 +10,7 @@
 在GACFV1的基础上，去掉interactive部分的Element-wise Product. attention作用于原始feature和interative feature两部分。
 
 ### GACFV4
-在GACFV2的基础上，去掉attention作用于原始feature的部分，attention 只作用于interaction部分，结果做Element-wise乘积，形成interactive feature，然后Propagate
+在GACFV2的基础上，去掉attention作用于原始feature的部分，attention 只作用于interaction部分，结果做Element-wise乘积，形成interactive feature，然后Propagate. This one is not good.
 
 ### *GACFV5
 在GACFV4的基础上，attention 只作用于interaction部分，并且去掉內积，attention输出的feature直接Propagate。

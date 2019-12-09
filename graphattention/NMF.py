@@ -1,8 +1,8 @@
 import torch
 from torch import nn
-class MF(nn.Module):
+class NMF(nn.Module):
     def __init__(self, model, n_users, n_items, n_layers, n_factors=16, droprate=0, MF_model=None, MLP_model=None):
-        super(MF, self).__init__()
+        super(NMF, self).__init__()
         self.model = model
         self.n_users = n_users
         self.n_items = n_items
@@ -68,7 +68,11 @@ class MF(nn.Module):
                     nn.init.xavier_uniform_(m.weight)
                     m.bias.data.zero_()
 
-            nn.init.kaiming_uniform_(self.output.weight, a=1, nonlinearity='sigmoid')
+            # nn.init.kaiming_uniform_(self.output.weight, a=1, nonlinearity='sigmoid')
+            # self.output.bias.data.zero_()
+            # nn.init.kaiming_uniform_(self.output.weight, a=1)
+            # self.output.bias.data.zero_()
+            nn.init.xavier_uniform_(self.output.weight)
             self.output.bias.data.zero_()
 
     def forward(self, idx_users, idx_items):

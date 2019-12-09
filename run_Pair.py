@@ -19,12 +19,13 @@ from graphattention.GACFmodel1 import GACFV1
 from graphattention.GACFmodel2 import GACFV2
 from graphattention.GACFmodel3 import GACFV3
 from graphattention.GACFmodel4 import GACFV4
-from graphattention.GACFmodel5 import GACFV5, GACFV5_BPR
+from graphattention.GACFmodel5 import GACFV5
 from graphattention.GACFmodel6 import GACFV6
 
-from graphattention.GCFmodel import  GCF, GCF_MF
-# from graphattention.GCFmodel import SVD
+from graphattention.GCFmodel import  NGCFMF, NGCFMLP, NGCFMFMLP, NGCFMF_concat_MF, NGCFMF_concat_MLP, NGCFMF_concat_MF_MLP, NGCFMLP_concat_MF, NGCFMLP_concat_MLP, NGCFMLP_concat_MF_MLP
 from graphattention.GCFmodel import NCF
+from graphattention.NMF import NMF
+
 from graphattention.BPRLoss import BPRLoss
 
 from train_eval import eval_neg_sample, eval_neg_all
@@ -56,14 +57,32 @@ def prepareData(args):
 def createModels(args, userNum, itemNum, adj):
     if args.model == 'NCF':
         model = NCF(userNum, itemNum, 64, layers=[128,64,32,16,8]).cuda()
-    elif args.model == 'GCF':
-        model = GCF(userNum, itemNum, adj, embedSize=args.embedSize, layers=args.layers).cuda()
+    if args.model == 'NMF':
+        model = NMF(args.model, userNum, itemNum, 3, args.embedSize, args.droprate).cuda()
+    elif args.model == 'NGCFMF':
+        model = NGCFMF(userNum, itemNum, adj, embedSize=args.embedSize, layers=args.layers).cuda()
+    elif args.model == 'NGCFMLP':
+        model = NGCFMLP(userNum, itemNum, adj, embedSize=args.embedSize, layers=args.layers).cuda()
+    elif args.model == 'NGCFMFMLP':
+        model = NGCFMFMLP(userNum, itemNum, adj, embedSize=args.embedSize, layers=args.layers).cuda()
+    elif args.model == 'NGCFMF_concat_MF':
+        model = NGCFMF_concat_MF(userNum, itemNum, adj, embedSize=args.embedSize, layers=args.layers).cuda()
+    elif args.model == 'NGCFMF_concat_MLP':
+        model = NGCFMF_concat_MLP(userNum, itemNum, adj, embedSize=args.embedSize, layers=args.layers).cuda()
+    elif args.model == 'NGCFMLP_concat_MF':
+        model = NGCFMLP_concat_MF(userNum, itemNum, adj, embedSize=args.embedSize, layers=args.layers).cuda()
+    elif args.model == 'NGCFMLP_concat_MLP':
+        model = NGCFMLP_concat_MLP(userNum, itemNum, adj, embedSize=args.embedSize, layers=args.layers).cuda()
+    elif args.model == 'NGCFMF_concat_MF_MLP':
+        model = NGCFMF_concat_MF_MLP(userNum, itemNum, adj, embedSize=args.embedSize, layers=args.layers).cuda()
+    elif args.model == 'NGCFMLP_concat_MF_MLP':
+        model = NGCFMLP_concat_MF_MLP(userNum, itemNum, adj, embedSize=args.embedSize, layers=args.layers).cuda()
     elif args.model == 'GACFV1':
         model = GACFV1(userNum, itemNum, adj, embedSize=args.embedSize, layers=args.layers, droprate=args.droprate).cuda()
     elif args.model == 'GACFV2':
         model = GACFV2(userNum, itemNum, adj, embedSize=args.embedSize, layers=args.layers, droprate=args.droprate).cuda()
     elif args.model == 'GACFV3':
-        model = GACFV2(userNum, itemNum, adj, embedSize=args.embedSize, layers=args.layers, droprate=args.droprate).cuda()
+        model = GACFV3(userNum, itemNum, adj, embedSize=args.embedSize, layers=args.layers, droprate=args.droprate).cuda()
     elif args.model == 'GACFV4':
         model = GACFV4(userNum, itemNum, adj, embedSize=args.embedSize, layers=args.layers, droprate=args.droprate).cuda()
     elif args.model == 'GACFV5':
@@ -149,9 +168,9 @@ def createModels(args, userNum, itemNum, adj):
 ######################################## MAIN-TRAINING-TESTING #################################
 def main(args):
     # Add summaryWriter. Results are in ./runs/ Run 'tensorboard --logdir=.' and see in browser.
-    summaryWriter = SummaryWriter(comment='_DS:{}_M:{}_Layer:{}_lr:{}_wd:{}_dp:{}_rs:{}'.
+    summaryWriter = SummaryWriter(comment='_DS:{}_M:{}_Layer:{}_lr:{}_wd:{}_dp:{}_rs:{}_parallel:{}'.
                     format(args.dataset, args.model, len(args.layers), args.lr, 
-                    args.weight_decay, args.droprate, args.seed))
+                    args.weight_decay, args.droprate, args.seed, args.parallel))
     train_loader, test_loader, userNum, itemNum, adj, test_user_num = prepareData(args)
     model, lossfn, optim = createModels(args, userNum, itemNum, adj)
 
@@ -187,10 +206,10 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Neural Graph Attention Collaborative Filtering')
-    parser.add_argument("--dataset", type=str, default="Gowalla", help="which dataset to use[ml100k/ml1m/Amazon])")  
-    parser.add_argument("--model", type=str, default="GCF", help="which model to use(NCF/GCF/GACFV1/GACFV2/GACFV3/GACFV4/GACFV5/GACFV6)")
+    parser.add_argument("--dataset", type=str, default="ml100k", help="which dataset to use[ml100k/ml1m/Amazon])")  
+    parser.add_argument("--model", type=str, default="NGCFMF", help="which model to use(NCF/GCF/GCF_MF/GACFV1/GACFV2/GACFV3/GACFV4/GACFV5/GACFV6)")
     parser.add_argument("--adj_type", type=str, default="mean_adj", help="which adj matrix to use [plain_adj, norm_adj, mean_adj]")
-    parser.add_argument("--epochs", type=int, default=300, help="training epoches")
+    parser.add_argument("--epochs", type=int, default=200, help="training epoches")
     parser.add_argument("--eval_every", type=int, default=50, help="evaluate every")
     parser.add_argument("--lr", type=float, default=0.001, help="learning rate")
     parser.add_argument("--weight_decay", type=float, default=0.0001, help="weight_decay")
