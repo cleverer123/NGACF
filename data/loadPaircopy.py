@@ -278,22 +278,23 @@ def buildLaplacianMat(rt, userNum, itemNum, adj_type):
 
     selfLoop = sparse.eye(userNum + itemNum)
     # def normalize_adj(adj):
-
-    #     sumArr = (adj>0).sum(axis=1)
-    #     diag = list(np.array(sumArr.flatten())[0])
-    #     diag = np.power(diag,-0.5)
-    #     D = sparse.diags(diag)
-    #     L = D * adj * D
-    #     L = sparse.coo_matrix(L)
-    #     return L
+    #     adj = adj.tocsr()
+    #     degree = sparse.csr_matrix(adj.sum(axis=1))
+    #     d_inv_sqrt = degree.power(-0.5) # csr_matrix (size ,1) 
+    #     d_inv_sqrt = np.array(d_inv_sqrt.todense()).reshape(-1)
+    #     D = sparse.diags(d_inv_sqrt)
+    #     L = D.dot(adj).dot(D) # csr_matrix (size, size)
+    #     return sparse.coo_matrix(L)
 
     def normalize_adj(adj):
         adj = adj.tocsr()
         degree = sparse.csr_matrix(adj.sum(axis=1))
-        d_inv_sqrt = degree.power(-0.5) # csr_matrix (size ,1) 
-        d_inv_sqrt = np.array(d_inv_sqrt.todense()).reshape(-1)
+        degree = np.array(degree.todense())
+        d_inv_sqrt = 1.0/degree 
+        d_inv_sqrt = d_inv_sqrt.reshape(-1)
+        d_inv_sqrt[np.isinf(d_inv_sqrt)] = 0.
         D = sparse.diags(d_inv_sqrt)
-        L = D.dot(adj).dot(D) # csr_matrix (size, size)
+        L = D.dot(adj) # csr_matrix (size, size)
         return sparse.coo_matrix(L)
     
     if adj_type == 'plain_adj':

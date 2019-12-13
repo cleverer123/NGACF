@@ -168,8 +168,8 @@ def createModels(args, userNum, itemNum, adj):
 ######################################## MAIN-TRAINING-TESTING #################################
 def main(args):
     # Add summaryWriter. Results are in ./runs/ Run 'tensorboard --logdir=.' and see in browser.
-    summaryWriter = SummaryWriter(comment='_DS:{}_M:{}_Layer:{}_lr:{}_wd:{}_dp:{}_rs:{}_parallel:{}'.
-                    format(args.dataset, args.model, len(args.layers), args.lr, 
+    summaryWriter = SummaryWriter(comment='_DS:{}_M:{}_E:{}_L:{}_lr:{}_wd:{}_dp:{}_rs:{}_parallel:{}'.
+                    format(args.dataset, args.model, args.embedSize, args.layers, args.lr, 
                     args.weight_decay, args.droprate, args.seed, args.parallel))
     train_loader, test_loader, userNum, itemNum, adj, test_user_num = prepareData(args)
     model, lossfn, optim = createModels(args, userNum, itemNum, adj)
@@ -207,29 +207,30 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Neural Graph Attention Collaborative Filtering')
     parser.add_argument("--dataset", type=str, default="ml100k", help="which dataset to use[ml100k/ml1m/Amazon])")  
-    parser.add_argument("--model", type=str, default="NGCFMF", help="which model to use(NCF/GCF/GCF_MF/GACFV1/GACFV2/GACFV3/GACFV4/GACFV5/GACFV6)")
+    parser.add_argument("--model", type=str, default="NGCFMF", help="which model to use(NGCFMF/GACFV1/GACFV2/GACFV3/GACFV4/GACFV5/GACFV6)")
     parser.add_argument("--adj_type", type=str, default="mean_adj", help="which adj matrix to use [plain_adj, norm_adj, mean_adj]")
     parser.add_argument("--epochs", type=int, default=200, help="training epoches")
     parser.add_argument("--eval_every", type=int, default=50, help="evaluate every")
     parser.add_argument("--lr", type=float, default=0.001, help="learning rate")
-    parser.add_argument("--weight_decay", type=float, default=0.0001, help="weight_decay")
+    parser.add_argument("--weight_decay", type=float, default=0.00001, help="weight_decay")
     parser.add_argument("--batch_size", type=int, default=2048, help="input batch size for training")
     parser.add_argument("--droprate", type=float, default=0.1, help="the rate for dropout")
     parser.add_argument("--train_rate", type=float, default=0.7, help="the train rate of dataset")
     parser.add_argument("--seed", type=int, default=2019, help="the seed for random")
     parser.add_argument("--embedSize", type=int, default=64, help="the size for Embedding layer")
-    parser.add_argument("--layers", type=list, default=[64,64], help="the layer list for propagation")
+    parser.add_argument("--layers", type=ast.literal_eval, default=[64,64], help="the layer list for propagation")
     parser.add_argument("--train_mode", type=str, default="NegSampling", help="the mode to train model [PairSampling, NegSampling]")
     parser.add_argument("--eval_mode", type=str, default="SampledNeg", help="the mode for evaluate[AllNeg, SampledNeg]")
     parser.add_argument("--parallel", type=ast.literal_eval, default=False, help="whether to use parallel model, input should be either 'True' or 'False'.")
     args = parser.parse_args()
     if args.parallel:
         print('----------------Parallel Mode is enabled----------------')
-        os.environ["CUDA_VISIBLE_DEVICES"] = '0, 1, 2' 
+        os.environ["CUDA_VISIBLE_DEVICES"] = '0,1,2,3' 
     else:
         print('----------------Parallel Mode is disabled.----------------')
         os.environ["CUDA_VISIBLE_DEVICES"] = '0' 
     torch.manual_seed(args.seed)
+    torch.cuda.manual_seed_all(args.seed)
     np.random.seed(args.seed)
     main(args)
 
