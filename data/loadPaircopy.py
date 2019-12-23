@@ -11,7 +11,7 @@ from scipy import sparse
 import scipy.sparse as sp
 from scipy.sparse.coo import coo_matrix 
 from ast import literal_eval
-from sklearn.model_selection import train_test_split
+# from sklearn.model_selection import train_test_split
 
 from data.mldataset import MLDataSet, PairDataset, AllNegtivesDataSet, SampledNegtivesDataSet
 
@@ -167,8 +167,8 @@ def load_data_adj(dataset, ratio_train, adj_type, trainMode, evalmode):
     t0 = time.time()
     train_data, test_data, test_user_num = load_train_test_data(rt, train_df, test_df, trainMode, evalmode)
     print('Time consuming of generating train_test data:', time.time() - t0)
-    adj = get_adj_mat(datapath, rt, userNum, itemNum, adj_type)   
-    return train_data, test_data, userNum, itemNum, adj, test_user_num
+    adj, laplacianMat = get_adj_mat(datapath, rt, userNum, itemNum, adj_type)   
+    return train_data, test_data, userNum, itemNum, adj, laplacianMat, test_user_num
 
 def load_data(dataset, evaluate, ratio_train, adj_type):
     if dataset in ['Amazon', 'Gowalla']:
@@ -256,9 +256,9 @@ def load_data(dataset, evaluate, ratio_train, adj_type):
                 test_data = SampledNegtivesDataSet(test_data.values)
             print('test_user_num:{}'.format(test_user_num))
 
-    adj = get_adj_mat(datapath, rt, userNum, itemNum, adj_type)
+    adj, laplacianMat = get_adj_mat(datapath, rt, userNum, itemNum, adj_type)
 
-    return train_data, test_data, userNum, itemNum, adj, test_user_num
+    return train_data, test_data, userNum, itemNum, adj, laplacianMat, test_user_num
 
 def scipySP_torchSP(L):
     idx = torch.LongTensor([L.row, L.col])
@@ -277,55 +277,53 @@ def buildLaplacianMat(rt, userNum, itemNum, adj_type):
     adj = sparse.vstack([uiMat_upperPart,uiMat])
 
     selfLoop = sparse.eye(userNum + itemNum)
-    # def normalize_adj(adj):
-    #     adj = adj.tocsr()
-    #     degree = sparse.csr_matrix(adj.sum(axis=1))
-    #     d_inv_sqrt = degree.power(-0.5) # csr_matrix (size ,1) 
-    #     d_inv_sqrt = np.array(d_inv_sqrt.todense()).reshape(-1)
-    #     D = sparse.diags(d_inv_sqrt)
-    #     L = D.dot(adj).dot(D) # csr_matrix (size, size)
-    #     return sparse.coo_matrix(L)
 
     def normalize_adj(adj):
         adj = adj.tocsr()
         degree = sparse.csr_matrix(adj.sum(axis=1))
-        degree = np.array(degree.todense())
-        d_inv_sqrt = 1.0/degree 
-        d_inv_sqrt = d_inv_sqrt.reshape(-1)
-        d_inv_sqrt[np.isinf(d_inv_sqrt)] = 0.
+        d_inv_sqrt = degree.power(-0.5) # csr_matrix (size ,1) 
+        d_inv_sqrt = np.array(d_inv_sqrt.todense()).reshape(-1)
         D = sparse.diags(d_inv_sqrt)
-        L = D.dot(adj) # csr_matrix (size, size)
+        L = D.dot(adj).dot(D) # csr_matrix (size, size)
         return sparse.coo_matrix(L)
+
+    # def normalize_adj(adj):
+    #     adj = adj.tocsr()
+    #     degree = sparse.csr_matrix(adj.sum(axis=1))
+    #     degree = np.array(degree.todense())
+    #     d_inv_sqrt = 1.0/degree 
+    #     d_inv_sqrt = d_inv_sqrt.reshape(-1)
+    #     d_inv_sqrt[np.isinf(d_inv_sqrt)] = 0.
+    #     D = sparse.diags(d_inv_sqrt)
+    #     L = D.dot(adj) # csr_matrix (size, size)
+    #     return sparse.coo_matrix(L)
     
-    if adj_type == 'plain_adj':
-        return adj
     # A' = (D + I)^-1/2  ( A + I )  (D + I)^-1/2
-    elif adj_type == 'norm_adj':
-        return normalize_adj(adj + selfLoop)
+    if adj_type == 'norm_adj':
+        return (adj + selfLoop).tocoo(), normalize_adj(adj + selfLoop)
     # A'' = D^-1/2 A D^-1/2
     elif adj_type == 'mean_adj':
-        return normalize_adj(adj)
+        return (adj + selfLoop).tocoo(), normalize_adj(adj)
 
 def get_adj_mat(path, rt, userNum, itemNum, adj_type):
     try:
-        if adj_type == 'plain_adj':
-            adj = sp.load_npz(path + '/s_adj_mat.npz')
-        elif adj_type == 'norm_adj':
-            adj = sp.load_npz(path + '/s_norm_adj_mat.npz')
+        adj = sp.load_npz(path + '/s_adj_mat.npz')
+        if adj_type == 'norm_adj':
+            laplacianMat = sp.load_npz(path + '/s_norm_adj_mat.npz')
         elif adj_type == 'mean_adj':
-            adj = sp.load_npz(path + '/s_mean_adj_mat.npz')
+            laplacianMat = sp.load_npz(path + '/s_mean_adj_mat.npz')
         print('Load adj matrix', adj.shape)
     except Exception:
         t0 = time.time()
-        adj = buildLaplacianMat(rt, userNum, itemNum, adj_type)
+        adj, laplacianMat = buildLaplacianMat(rt, userNum, itemNum, adj_type)
         print('Time consuming for building adj matrix', adj.shape, time.time() - t0)
-        if adj_type == 'plain_adj':
-            sp.save_npz(path + '/s_adj_mat.npz', adj)
-        elif adj_type == 'norm_adj':
-            sp.save_npz(path + '/s_norm_adj_mat.npz', adj)
+        sp.save_npz(path + '/s_adj_mat.npz', adj)
+        if adj_type == 'norm_adj':
+            sp.save_npz(path + '/s_norm_adj_mat.npz', laplacianMat)
         elif adj_type == 'mean_adj':  
-            sp.save_npz(path + '/s_mean_adj_mat.npz', adj)
-    return scipySP_torchSP(adj)
+            sp.save_npz(path + '/s_mean_adj_mat.npz', laplacianMat)
+    # return torch.from_numpy(adj.todense()), scipySP_torchSP(laplacianMat)
+    return scipySP_torchSP(adj).coalesce(), scipySP_torchSP(laplacianMat)
 
 # temp = np.dot(np.diag(np.power(degree, -1)), dense_A)
 def check_adj_if_equal(adj):

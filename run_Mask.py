@@ -18,7 +18,7 @@ from tensorboardX import SummaryWriter
 from graphattention.GACFmodel1 import GACFV1
 from graphattention.GACFmodel2 import GACFV2
 from graphattention.GACFMask import GACFMask
-from graphattention.SPGA import SPGACF
+from graphattention.SPGA import SPGACF, MultiLayerSPGA, SPGAMGP
 from graphattention.GACFmodel3 import GACFV3
 from graphattention.GACFmodel4 import GACFV4
 from graphattention.GACFmodel5 import GACFV5
@@ -30,7 +30,7 @@ from graphattention.NMF import NMF
 
 from graphattention.BPRLoss import BPRLoss
 
-from train_eval import eval_neg_sample, train_neg_sample
+from train_eval_mask import eval_neg_sample, eval_neg_all, train_bpr, train_neg_sample
 
 from parallel import DataParallelModel, DataParallelCriterion, DataParallelCriterion2
 CUDA_LAUNCH_BLOCKING=1
@@ -84,8 +84,12 @@ def createModels(args, userNum, itemNum, adj):
         model = GACFV2(userNum, itemNum, adj, embedSize=args.embedSize, layers=args.layers, droprate=args.droprate).cuda()
     elif args.model == 'GACFMask':
         model = GACFMask(userNum, itemNum, adj, embedSize=args.embedSize, layers=args.layers, droprate=args.droprate).cuda()
-    elif args.model == 'SPGA':
+    elif args.model == 'SPGACF':
         model = SPGACF(userNum, itemNum, adj, embedSize=args.embedSize, layers=args.layers, droprate=args.droprate).cuda()
+    elif args.model == 'MultiLayerSPGA':
+        model = MultiLayerSPGA(userNum, itemNum, adj, embedSize=args.embedSize, layers=args.layers, droprate=args.droprate).cuda()
+    elif args.model == 'SPGAMGP':
+        model = SPGAMGP(userNum, itemNum, adj, embedSize=args.embedSize, layers=args.layers, droprate=args.droprate).cuda()
     elif args.model == 'GACFV3':
         model = GACFV3(userNum, itemNum, adj, embedSize=args.embedSize, layers=args.layers, droprate=args.droprate).cuda()
     elif args.model == 'GACFV4':
@@ -117,16 +121,29 @@ def main(args):
     train_loader, test_loader, userNum, itemNum, adj, laplacianMat, test_user_num = prepareData(args)
     model, lossfn, optim = createModels(args, userNum, itemNum, laplacianMat)
 
+    
+       
     for epoch in range(args.epochs):
-        t0 = time.time()      
-        if args.train_mode == 'NegSampling':
-            train_loss = train_neg_sample(model, train_loader, optim, lossfn, args.parallel)
+        t0 = time.time()
+        if args.train_mode == 'PairSampling':
+            train_loss = train_bpr(model, train_loader, optim, lossfn)
+        elif args.train_mode == 'NegSampling':
+            train_loss = train_neg_sample(model, train_loader, adj.to_dense(), optim, lossfn, args.parallel)
         summaryWriter.add_scalar('loss/train_loss', train_loss, epoch)
         print('------epoch:{}, train_loss:{:5f}, time consuming:{}s'.format(epoch, train_loss, time.strftime("%H: %M: %S", time.gmtime(time.time() - t0))))
         if (epoch+1) % args.eval_every == 0 :
             t0 = time.time()
-            if args.eval_mode == 'SampledNeg':
-                HR, NDCG = eval_neg_sample(model, test_loader, test_user_num, 10, args.parallel)
+            if args.eval_mode == 'AllNeg':
+                metrics = eval_neg_all(model, test_loader, test_user_num, itemNum, args.parallel)
+                print('epoch:{} metrics:{}'.format(epoch, metrics))
+                for i, K in enumerate([10,20]):
+                    summaryWriter.add_scalar('metrics@{}/precision'.format(K), metrics['precision'][i], epoch)
+                    summaryWriter.add_scalar('metrics@{}/recall'.format(K), metrics['recall'][i], epoch)
+                    summaryWriter.add_scalar('metrics@{}/ndcg'.format(K), metrics['ndcg'][i], epoch)
+                    summaryWriter.add_scalar('metrics@{}/hit_ratio'.format(K), metrics['hit_ratio'], epoch)
+                    summaryWriter.add_scalar('metrics@{}/auc'.format(K), metrics['auc'], epoch)
+            elif args.eval_mode == 'SampledNeg':
+                HR, NDCG = eval_neg_sample(model, test_loader, adj.to_dense(), test_user_num, 10, args.parallel)
                 print('epoch:{}, HR:{:5f}, NDCG:{:5f}'.format(epoch, HR, NDCG))
                 summaryWriter.add_scalar('metrics/HR', HR, epoch)
                 summaryWriter.add_scalar('metrics/NDCG', NDCG, epoch)
@@ -158,7 +175,7 @@ if __name__ == "__main__":
         os.environ["CUDA_VISIBLE_DEVICES"] = '0,1,2' 
     else:
         print('----------------Parallel Mode is disabled.----------------')
-        os.environ["CUDA_VISIBLE_DEVICES"] = '1' 
+        os.environ["CUDA_VISIBLE_DEVICES"] = '0' 
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed_all(args.seed)
     np.random.seed(args.seed)
