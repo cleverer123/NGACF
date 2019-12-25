@@ -19,6 +19,7 @@ from graphattention.GACFmodel1 import GACFV1
 from graphattention.GACFmodel2 import GACFV2
 from graphattention.GACFMask import GACFMask
 from graphattention.SPGA import SPGACF, MultiLayerSPGA, SPGAMGP
+from graphattention.SPUIGACF import SPUIGACF, SPUIGAGPCF
 from graphattention.GACFmodel3 import GACFV3
 from graphattention.GACFmodel4 import GACFV4
 from graphattention.GACFmodel5 import GACFV5
@@ -90,6 +91,10 @@ def createModels(args, userNum, itemNum, adj):
         model = MultiLayerSPGA(userNum, itemNum, adj, embedSize=args.embedSize, layers=args.layers, droprate=args.droprate).cuda()
     elif args.model == 'SPGAMGP':
         model = SPGAMGP(userNum, itemNum, adj, embedSize=args.embedSize, layers=args.layers, droprate=args.droprate).cuda()
+    elif args.model == 'SPUIGACF':
+        model = SPUIGACF(userNum, itemNum, adj, embedSize=args.embedSize, layers=args.layers, droprate=args.droprate).cuda()
+    elif args.model == 'SPUIGAGPCF':
+        model = SPUIGAGPCF(userNum, itemNum, adj, embedSize=args.embedSize, layers=args.layers, droprate=args.droprate).cuda()
     elif args.model == 'GACFV3':
         model = GACFV3(userNum, itemNum, adj, embedSize=args.embedSize, layers=args.layers, droprate=args.droprate).cuda()
     elif args.model == 'GACFV4':

@@ -271,10 +271,10 @@ def buildLaplacianMat(rt, userNum, itemNum, adj_type):
     # print('uiMat shape', uiMat.shape)
     uiMat_upperPart = coo_matrix((rt['rating'], (rt['userId'], rt_item)))
     # print('uiMat_upperPart shape', uiMat_upperPart.shape)
-    uiMat = uiMat.transpose()
-    uiMat.resize((itemNum, userNum + itemNum))
+    uiMat_lowerPart = uiMat.transpose()
+    uiMat_lowerPart.resize((itemNum, userNum + itemNum))
 
-    adj = sparse.vstack([uiMat_upperPart,uiMat])
+    adj = sparse.vstack([uiMat_upperPart,uiMat_lowerPart])
 
     selfLoop = sparse.eye(userNum + itemNum)
 
@@ -303,7 +303,8 @@ def buildLaplacianMat(rt, userNum, itemNum, adj_type):
         return (adj + selfLoop).tocoo(), normalize_adj(adj + selfLoop)
     # A'' = D^-1/2 A D^-1/2
     elif adj_type == 'mean_adj':
-        return (adj + selfLoop).tocoo(), normalize_adj(adj)
+        # return (adj + selfLoop).tocoo(), normalize_adj(adj)
+        return uiMat, normalize_adj(adj)
 
 def get_adj_mat(path, rt, userNum, itemNum, adj_type):
     try:
