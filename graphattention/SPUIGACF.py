@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 class SPUIGACF(nn.Module):
 
-    def __init__(self,userNum,itemNum,adj,embedSize,layers, droprate, useCuda=True):
+    def __init__(self,userNum,itemNum,embedSize,layers, droprate, useCuda=True):
 
         super(SPUIGACF, self).__init__()
         self.useCuda = useCuda
@@ -15,6 +15,55 @@ class SPUIGACF(nn.Module):
         self.iEmbd = nn.Embedding(itemNum,embedSize)
 
         self.gat = SpUIGAT(nfeat=embedSize, # d_model
+                nhid=8,                   # d_model / 8
+                nclass=embedSize,         # d_model
+                dropout=droprate, 
+                nheads=8, 
+                alpha=0.2)
+
+        self._init_weight_()
+
+    def _init_weight_(self):
+        nn.init.normal_(self.uEmbd.weight, std=0.01)
+        nn.init.normal_(self.iEmbd.weight, std=0.01)
+
+    def getFeatureMat(self):
+        uidx = torch.LongTensor([i for i in range(self.userNum)])
+        iidx = torch.LongTensor([i for i in range(self.itemNum)])
+        if self.useCuda == True:
+            uidx = uidx.cuda()
+            iidx = iidx.cuda()
+        userEmbd = self.uEmbd(uidx)
+        itemEmbd = self.iEmbd(iidx)
+        features = torch.cat([userEmbd,itemEmbd],dim=0)
+        return uidx, iidx + self.userNum , features
+
+    def forward(self, userIdx, itemIdx, mask):
+        mask = mask.squeeze()
+        uidx, iidx, features = self.getFeatureMat() # features.shape: (batch_size, embedSize)
+
+        # finalEmbd = features.clone()
+        features = self.gat(uidx, iidx, features, mask)
+        # finalEmbd = torch.cat([finalEmbd, features.clone()],dim=1)
+
+        itemIdx = itemIdx + self.userNum
+        userEmbd = features[userIdx]
+        itemEmbd = features[itemIdx]
+        return torch.sum(userEmbd * itemEmbd, dim=1)
+
+class SPUIMultiGACF(nn.Module):
+
+    def __init__(self,userNum,itemNum,embedSize,layers, droprate, useCuda=True):
+
+        super(SPUIMultiGACF, self).__init__()
+        self.useCuda = useCuda
+        self.userNum = userNum
+        self.itemNum = itemNum
+        self.droprate = droprate
+        self.uEmbd = nn.Embedding(userNum,embedSize)
+        self.iEmbd = nn.Embedding(itemNum,embedSize)
+
+        self.gat = SPUIMultiGAT(nfeat=embedSize, # d_model
                 nhid=8,                   # d_model / 8
                 nclass=embedSize,         # d_model
                 dropout=droprate, 
@@ -128,8 +177,8 @@ class GPLayer(nn.Module):
     
     def forward(self, features, laplacianMat, selfLoop):
         # residual = features
-        # L1 = laplacianMat + selfLoop
-        L1 = laplacianMat
+        L1 = laplacianMat + selfLoop
+        # L1 = laplacianMat
         L1 = L1.cuda()
         features = torch.sparse.mm(L1,features)
         # features += residual
@@ -165,6 +214,47 @@ class SpUIGAT(nn.Module):
         features = F.elu(self.out_att(uidx, iidx, features, adj))
         return features
 
+class SPUIMultiGAT(nn.Module):
+    def __init__(self, nfeat, nhid, nclass, dropout, alpha, nheads):
+        super(SPUIMultiGAT, self).__init__()
+        self.dropout = dropout
+
+        self.attentions1 = [SpUIGraphAttentionLayer(nfeat, 
+                                                 nhid, 
+                                                 dropout=dropout, 
+                                                 alpha=alpha, 
+                                                 concat=True) for _ in range(nheads)]
+
+        self.attentions2 = [SpUIGraphAttentionLayer(nfeat, 
+                                                 nhid, 
+                                                 dropout=dropout, 
+                                                 alpha=alpha, 
+                                                 concat=True) for _ in range(nheads)]
+
+        for i, attention in enumerate(self.attentions1):
+            self.add_module('attention1_{}'.format(i), attention)
+
+        for i, attention in enumerate(self.attentions2):
+            self.add_module('attention2_{}'.format(i), attention)
+
+        self.out_att = SpUIGraphAttentionLayer(nhid * nheads, 
+                                             nclass, 
+                                             dropout=dropout, 
+                                             alpha=alpha, 
+                                             concat=False)
+
+    def forward(self, uidx, iidx, features, adj):
+        features = F.dropout(features, self.dropout, training=self.training)
+        
+        # print('uidx.device', uidx.device, 'features.device', features.device, 'gat.device', next(self.attention_0.parameters()).device)
+        
+        features = torch.cat([att(uidx, iidx, features, adj) for att in self.attentions1], dim=1)
+        features = F.dropout(features, self.dropout, training=self.training)
+        features = torch.cat([att(uidx, iidx, features, adj) for att in self.attentions2], dim=1)
+        features = F.dropout(features, self.dropout, training=self.training)
+        features = F.elu(self.out_att(uidx, iidx, features, adj))
+        return features
+
 class SpUIGraphAttentionLayer(nn.Module):
     """
     Sparse version GAT layer, similar to https://arxiv.org/abs/1710.10903
@@ -191,7 +281,63 @@ class SpUIGraphAttentionLayer(nn.Module):
         self.leakyrelu = nn.LeakyReLU(self.alpha)
         # self.spmm = SpecialSpmm()
 
-    def forward(self, uidx, iidx, features, adj):
+    # def forward(self, uidx, iidx, features, indices):
+    #     # dv = 'cuda' if input.is_cuda else 'cpu'
+    #     dv = 'cuda'
+
+    #     num_user = uidx.size()[0]
+    #     num_item = iidx.size()[0]
+    #     # adj: userid X item_id 
+    #     # edge = adj.nonzero().t() # edge: (2, num_nodes), this can be seen as sparse indexs
+    #     # edge = adj.indices()
+    #     edge = indices
+        
+        
+    #     u_h = torch.mm(features[uidx], self.W_u)  # (num_user, out_dim)
+    #     i_h = torch.mm(features[iidx], self.W_i)  # (num_item, out_dim)
+
+    #     edge_h = torch.cat((u_h[edge[0, :], :], i_h[edge[1, :], :]), dim=1).t()  # cat((num_nodes, out_dim), (num_nodes, out_dim), dim=1) -> (num_nodes, 2*out_dim)
+    #     # attention coefficients. See paper 'Graph Attention Networks' Eq.1 and Eq.3 numerator (公式3中的分子)
+    #     edge_e = torch.exp(-self.leakyrelu(self.a.mm(edge_h).squeeze())) # edge_e: (num_nodes) , this can be seen as sparse values
+        
+    #     # See paper 'Graph Attention Networks' Eq.3 denominator  (公式3中的分母)
+        
+    #     a = torch.sparse_coo_tensor(edge, edge_e, torch.Size([num_user, num_item]))
+    #     # e_rowsum = self.spmm(edge, edge_e, torch.Size([num_user, num_item]), torch.ones(size=(num_item, 1), device=dv)) # e_rowsum: (num_user)
+    #     e_rowsum = torch.sparse.mm(a, torch.ones(size=(num_item, 1), device=dv))
+    #     assert not (e_rowsum == 0).sum() # 如果中断，则有行和为0的情况，会出现除0
+
+    #     e_colsum = torch.sparse.mm(a.t(), torch.ones(size=(num_user, 1), device=dv))
+    #     # assert not (e_colsum == 0).sum() 
+
+    #     # 对于user-item，对行求和，再除以行和，那每一行表示，该行对应的用户，对于每一项item的注意力分布。
+
+    #     edge_e = self.dropout(edge_e)
+        
+    #     a = torch.sparse_coo_tensor(edge, edge_e, torch.Size([num_user, num_item]))
+    #     # feature sum of neighbours of user 参考GAT公式4
+    #     attentive_items = torch.sparse.mm(a, i_h)
+    #     attentive_items = attentive_items.div(e_rowsum)  # (num_user, out_dim)
+    #     u_h_prime = u_h + attentive_items # (num_user, out_dim)
+    #     assert not torch.isnan(u_h_prime).any()
+        
+    #     # feature sum of neighbours of items
+    #     attentive_users = torch.sparse.mm(a.t(), u_h)
+    #     attentive_users = attentive_users.div(e_colsum) # (num_item, out_dim)
+    #     attentive_users[torch.isnan(attentive_users)] = 0.0
+    #     i_h_prime = i_h + attentive_users
+    #     assert not torch.isnan(i_h_prime).any()
+        
+    #     h_prime = torch.cat([u_h_prime,i_h_prime], dim=0)
+
+    #     if self.concat:
+    #         # if this layer is not last layer,
+    #         return F.elu(h_prime)
+    #     else:
+    #         # if this layer is last layer,
+    #         return h_prime
+
+    def forward(self, uidx, iidx, features, indices):
         # dv = 'cuda' if input.is_cuda else 'cpu'
         dv = 'cuda'
 
@@ -202,8 +348,9 @@ class SpUIGraphAttentionLayer(nn.Module):
         num_user = uidx.size()[0]
         num_item = iidx.size()[0]
         # adj: userid X item_id 
-        edge = adj.nonzero().t() # edge: (2, num_nodes), this can be seen as sparse indexs
-        
+        # edge = adj.nonzero().t() # edge: (2, num_nodes), this can be seen as sparse indexs
+        edge = indices
+
         # u_h = self.W_u(features[uidx])
         # i_h = self.W_i(features[iidx])
         u_h = torch.mm(features[uidx], self.W_u)  # (num_user, out_dim)
