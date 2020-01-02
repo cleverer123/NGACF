@@ -13,6 +13,7 @@ from torch.utils.data import random_split
 import pandas as pd
 import numpy as np
 from numpy import diag
+from sklearn.model_selection import train_test_split
 from tensorboardX import SummaryWriter
 
 from graphattention.GACFmodel1 import GACFV1
@@ -54,7 +55,10 @@ def prepareData(args):
         rt['userId'] = rt['userId'] - 1
         rt['itemId'] = rt['itemId'] - 1
         print('userNum:{}, itemNum:{}'.format(userNum, itemNum))
-        train_df, test_df = split_loo(rt)
+        if args.train_mode == 'NegSampling':
+            train_df, test_df = split_loo(rt)
+        elif args.train_mode == 'PairSampling':
+            train_df, test_df = train_test_split(rt, test_size=0.2)
     elif args.dataset == 'ml100k':
         datapath = path.dirname(__file__) + './data/1K'
         rt = load100KRatings(datapath)
@@ -64,7 +68,10 @@ def prepareData(args):
         print('userNum:{}, itemNum:{}'.format(userNum, itemNum))
         rt['userId'] = rt['userId'] - 1
         rt['itemId'] = rt['itemId'] - 1
-        train_df, test_df = split_loo(rt)
+        if args.train_mode == 'NegSampling':
+            train_df, test_df = split_loo(rt)
+        elif args.train_mode == 'PairSampling':
+            train_df, test_df = train_test_split(rt, test_size=0.2)
 
     adj = get_adj_mat(datapath, rt, userNum, itemNum, args.adj_type)
 
