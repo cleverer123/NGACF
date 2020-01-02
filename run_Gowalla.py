@@ -32,7 +32,7 @@ from graphattention.BPRLoss import BPRLoss
 
 from parallel import DataParallelModel, DataParallelCriterion, DataParallelCriterion2
 from train_eval_Gowalla import eval_neg_sample, eval_neg_all, train_bpr, train_neg_sample
-from data.loadGowalla import load1MRatings, load100KRatings, split_loo, loadGowalla, train_pos_neg_exclude_test, test_positives_negtives, positives_negtives, get_adj_mat
+from data.loadGowalla import load1MRatings, load100KRatings, split_loo, loadGowalla, train_pos_neg_exclude_test, test_positives, test_positives_negtives, positives_negtives, get_adj_mat
 
 
 CUDA_LAUNCH_BLOCKING=1
@@ -70,12 +70,14 @@ def prepareData(args):
 
     if args.train_mode == 'PairSampling' and args.eval_mode == 'AllNeg':
         train_pos_neg = train_pos_neg_exclude_test(rt, train_df)
-        test_pos_neg, _ = test_positives_negtives(test_df, train_pos_neg)
+        # test_pos_neg, _ = test_positives_negtives(test_df, train_pos_neg)
+        test_df = test_positives(test_df) 
+        test_pos_neg = train_pos_neg
         
     elif args.train_mode == 'NegSampling' and args.eval_mode == 'SampledNeg':
         train_pos_neg = positives_negtives(rt)
         test_pos_neg = train_pos_neg
-
+    print('lenth of traindf', len(train_df), 'lenth of test_df', len(test_df))
     return train_df, test_df, train_pos_neg, test_pos_neg, userNum, itemNum, adj.indices()
 
 def createModels(args, userNum, itemNum):
@@ -106,6 +108,7 @@ def main(args):
                     format(args.dataset, args.model, args.embedSize, args.layers, args.lr, 
                     args.weight_decay, args.droprate, args.seed, args.parallel))
     train_df, test_df, train_pos_neg, test_pos_neg, userNum, itemNum, adj = prepareData(args)
+    print('adj.shape', adj.shape)
     model, lossfn, optim = createModels(args, userNum, itemNum)
 
     
@@ -113,7 +116,7 @@ def main(args):
     for epoch in range(args.epochs):
         t0 = time.time()
         if args.train_mode == 'PairSampling':
-            train_loss = train_bpr(model, args.batch_size, train_df, train_pos_neg, optim, lossfn)
+            train_loss = train_bpr(model, args.batch_size, train_df, train_pos_neg, adj, optim, lossfn, args.parallel)
         elif args.train_mode == 'NegSampling':
             train_loss = train_neg_sample(model, args.batch_size, train_df, train_pos_neg, adj, optim, lossfn, args.parallel)
         summaryWriter.add_scalar('loss/train_loss', train_loss, epoch)
@@ -121,14 +124,14 @@ def main(args):
         if (epoch+1) % args.eval_every == 0 :
             t0 = time.time()
             if args.eval_mode == 'AllNeg':
-                metrics = eval_neg_all(model, args.batch_size, test_df, test_pos_neg, itemNum, args.parallel)
+                metrics = eval_neg_all(model, args.batch_size, test_df, test_pos_neg, adj, itemNum, args.parallel)
                 print('epoch:{} metrics:{}'.format(epoch, metrics))
                 for i, K in enumerate([10,20]):
                     summaryWriter.add_scalar('metrics@{}/precision'.format(K), metrics['precision'][i], epoch)
                     summaryWriter.add_scalar('metrics@{}/recall'.format(K), metrics['recall'][i], epoch)
                     summaryWriter.add_scalar('metrics@{}/ndcg'.format(K), metrics['ndcg'][i], epoch)
-                    summaryWriter.add_scalar('metrics@{}/hit_ratio'.format(K), metrics['hit_ratio'], epoch)
-                    summaryWriter.add_scalar('metrics@{}/auc'.format(K), metrics['auc'], epoch)
+                    summaryWriter.add_scalar('metrics@{}/hit_ratio'.format(K), metrics['hit_ratio'][i], epoch)
+                    # summaryWriter.add_scalar('metrics@{}/auc'.format(K), metrics['auc'], epoch)
             elif args.eval_mode == 'SampledNeg':
                 HR, NDCG = eval_neg_sample(model, args.batch_size, test_df, test_pos_neg, adj, 10, args.parallel)
                 print('epoch:{}, HR:{:5f}, NDCG:{:5f}'.format(epoch, HR, NDCG))
@@ -156,13 +159,14 @@ if __name__ == "__main__":
     parser.add_argument("--train_mode", type=str, default="NegSampling", help="the mode to train model [PairSampling, NegSampling]")
     parser.add_argument("--eval_mode", type=str, default="SampledNeg", help="the mode for evaluate[AllNeg, SampledNeg]")
     parser.add_argument("--parallel", type=ast.literal_eval, default=False, help="whether to use parallel model, input should be either 'True' or 'False'.")
+    parser.add_argument("--gpu_id", type=str, default="0", help="default gpu index")
     args = parser.parse_args()
     if args.parallel:
         print('----------------Parallel Mode is enabled----------------')
-        os.environ["CUDA_VISIBLE_DEVICES"] = '0,1,2' 
+        os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_id 
     else:
         print('----------------Parallel Mode is disabled.----------------')
-        os.environ["CUDA_VISIBLE_DEVICES"] = '3' 
+        os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_id  
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed_all(args.seed)
     np.random.seed(args.seed)

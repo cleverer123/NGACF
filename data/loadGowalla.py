@@ -76,12 +76,21 @@ def train_neg_sampling(train_df, pos_neg):
     sampled_train_neg['neg_samples'] = sampled_train_neg['negative_items'].apply(lambda x: random.sample(x, 4))
     return sampled_train_neg[['userId', 'itemId', 'neg_samples']]
 
- # 对于 evalMode == 'AllNeg', 负样本为 item_pool - trian_items
-def test_positives_negtives(test_df, train_pos_neg):
-    test_pos_neg = test_df.groupby('userId')['itemId'].apply(set).reset_index().rename(columns={'itemId': 'positive_items'})
-    test_pos_neg = pd.merge(test_pos_neg, train_pos_neg[['userId', 'negative_items']], on='userId')
-    test_user_num = len(test_pos_neg['userId'].unique())
-    return test_pos_neg[['userId', 'positive_items', 'negative_items']], test_user_num
+
+def test_positives(test_df):
+    test_pos = test_df.groupby('userId')['itemId'].apply(set).reset_index().rename(columns={'itemId': 'positive_items'})
+    return test_pos[['userId', 'positive_items']]
+
+def test_positives_negtives(test_pos, train_pos_neg):
+    test_pos_neg = pd.merge(test_pos, train_pos_neg[['userId', 'negative_items']], on='userId')
+    return test_pos_neg[['userId', 'positive_items', 'negative_items']]
+
+#  # 对于 evalMode == 'AllNeg', 负样本为 item_pool - trian_items
+# def test_positives_negtives(test_df, train_pos_neg):
+#     test_pos_neg = test_df.groupby('userId')['itemId'].apply(set).reset_index().rename(columns={'itemId': 'positive_items'})
+#     test_pos_neg = pd.merge(test_pos_neg, train_pos_neg[['userId', 'negative_items']], on='userId')
+#     test_user_num = len(test_pos_neg['userId'].unique())
+#     return test_pos_neg[['userId', 'positive_items', 'negative_items']], test_user_num
 
 def test_neg_sampling(test_df, pos_neg):
     sample_test_neg = pd.merge(test_df, pos_neg[['userId', 'negative_items']], on='userId')

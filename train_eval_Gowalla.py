@@ -7,7 +7,7 @@ import multiprocessing
 import heapq
 import graphattention.metrics as metrics
 from graphattention.BPRLoss import BPRLoss
-from data.loadGowalla import train_pair_sampling, train_neg_sampling, test_neg_sampling
+from data.loadGowalla import train_pair_sampling, train_neg_sampling, test_neg_sampling, test_positives_negtives
 ############################################ Train ####################################################
 def train(model, train_loader, optim, lossfn):
     
@@ -87,16 +87,22 @@ def train_neg_sample(model, batch_size, train_df, train_pos_neg, adj, optim, los
             
     return total_loss/len(train_df)
 
-def train_bpr(model, batch_size, train_df, train_pos_neg, optim, lossfn):
+def train_bpr(model, batch_size, train_df, train_pos_neg, adj, optim, lossfn, is_parallel):
     # lossfn = BPRLoss()
     model.train()
     # if isparalell and torch.cuda.device_count()>1:  
     #     lossfn = DataParallelCriterion2(lossfn)
     total_loss = 0.0
 
-    n_batches = len(train_df) // batch_size + 1
+    if is_parallel:
+        adj = adj.expand(torch.cuda.device_count(), *adj.shape).cuda()
+        batch_size = batch_size * torch.cuda.device_count()
+    else:
+        adj = torch.LongTensor(adj).cuda()
 
+    n_batches = len(train_df) // batch_size + 1
     for batch_id in range(n_batches):
+        torch.cuda.empty_cache() # 清空cache的数据，避免显存溢出。
         start = batch_id * batch_size
         end = (batch_id + 1) * batch_size
         if end > len(train_df):
@@ -106,18 +112,19 @@ def train_bpr(model, batch_size, train_df, train_pos_neg, optim, lossfn):
         batch_pairsampled = train_pair_sampling(batch_train_df, train_pos_neg)
 
         user_idxs = batch_pairsampled['userId'].values
-        pos_item_idxs = batch_pairsampled['pos_sample'].values
-        neg_item_idxs = batch_pairsampled['neg_sample'].values
+        pos_item_idxs = batch_pairsampled['pos_sample'].apply(torch.tensor).values
+        neg_item_idxs = batch_pairsampled['neg_sample'].apply(torch.tensor).values
+
 
     # for batch_id, (user_idxs, pos_item_idxs, neg_item_idxs) in enumerate(train_loader):
         # print(user_idxs, pos_item_idxs, neg_item_idxs)
         user_idxs = torch.LongTensor(user_idxs).cuda()
-        pos_item_idxs = torch.LongTensor(pos_item_idxs).cuda()
-        neg_item_idxs = torch.LongTensor(neg_item_idxs).cuda()
+        pos_item_idxs = torch.cat(list(pos_item_idxs),dim=0).cuda()
+        neg_item_idxs = torch.cat(list(neg_item_idxs), dim=0).cuda()
 
         optim.zero_grad()
-        pos_scores = model(user_idxs, pos_item_idxs) 
-        neg_scores = model(user_idxs, neg_item_idxs)
+        pos_scores = model(user_idxs, pos_item_idxs, adj) 
+        neg_scores = model(user_idxs, neg_item_idxs, adj)
         
         loss = lossfn(pos_scores, neg_scores)
         # loss.backward()
@@ -184,10 +191,10 @@ def eval_neg_sample(model, batch_size, test_df, test_pos_neg, adj, top_k, is_par
     pool = multiprocessing.Pool(cores)
     batch_size = batch_size//8
     if is_parallel:
-        # adj = [adj,adj,adj]
         adj = adj.expand(torch.cuda.device_count(), *adj.shape).cuda()
     else:
         adj = torch.LongTensor(adj).cuda()
+
     with torch.no_grad():
         model.eval()
 
@@ -259,7 +266,7 @@ def report_pos_neg(x):
 
 
 ########################################## Eval for test data with all negatives #################################################
-def eval_neg_all(model, batch_size, test_df, test_pos_neg, itemNum, is_parallel):
+def eval_neg_all(model, batch_size, test_df, test_pos_neg, adj, itemNum, is_parallel):
     model.eval()
     Ks = [10,20]
     result = {'precision': np.zeros(len(Ks)), 'recall': np.zeros(len(Ks)), 'ndcg': np.zeros(len(Ks)),
@@ -268,24 +275,31 @@ def eval_neg_all(model, batch_size, test_df, test_pos_neg, itemNum, is_parallel)
     cores = multiprocessing.cpu_count() // 2
     # print('multiprocessing.cpu_count()', cores)
     pool = multiprocessing.Pool(cores)
-    test_user_num = len(test_df)
+    test_user_num = len(test_pos_neg)
     item_batch_size = batch_size
     item_loader = DataLoader(ItemDataSet(np.arange(itemNum)), batch_size=item_batch_size, shuffle=False, pin_memory=False)
     
     user_batch_size = batch_size // 16
     n_user_batchs = test_user_num // user_batch_size + 1
 
+    if is_parallel:
+        adj = adj.expand(torch.cuda.device_count(), *adj.shape).cuda()
+    else:
+        adj = torch.LongTensor(adj).cuda()
     # 手动加载 test_data. dataframe: ['userId', 'positive_items', 'negative_items']]
     for batch_id in range(n_user_batchs):
+        torch.cuda.empty_cache() # 清空cache的数据，避免显存溢出。
         start = batch_id * user_batch_size
         end = (batch_id + 1) * user_batch_size
         if end > test_user_num:
             end = test_user_num
-        batch_test_df = test_df.iloc[start:end]
+        batch_test_pos = test_df.iloc[start:end]
+        batch_test_pos_neg = test_positives_negtives(batch_test_pos, test_pos_neg)
+        
 
-        userIdx = torch.tensor(batch_test_df['userId'].values)
-        pos_itemIdxs = batch_test_df['positive_items'].values
-        neg_itemIdxs = batch_test_df['negative_items'].values
+        userIdx = torch.tensor(batch_test_pos_neg['userId'].values)
+        pos_itemIdxs = batch_test_pos_neg['positive_items'].values
+        neg_itemIdxs = batch_test_pos_neg['negative_items'].values
 
     # for batch_id, (userIdx, pos_itemIdxs, neg_itemIdxs) in enumerate(test_loader):
         # userIdx = userIdx.long().cuda() # (user_batch_size)
@@ -299,7 +313,7 @@ def eval_neg_all(model, batch_size, test_df, test_pos_neg, itemNum, is_parallel)
             u_Idxs = userIdx.expand(itemIdx.shape[0], userIdx.shape[0]).transpose(1, 0).reshape(-1).long().cuda() # (user_batch_size * item_batch_size)
             i_Idxs = itemIdx.expand(userIdx.shape[0], itemIdx.shape[0]).reshape(-1).long().cuda() # (user_batch_size * item_batch_size)
 
-            item_batch_ratings = model(u_Idxs, i_Idxs)
+            item_batch_ratings = model(u_Idxs, i_Idxs, adj)
             # 并行处理
             if is_parallel and torch.cuda.device_count()>1:
                 l = []
