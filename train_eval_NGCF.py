@@ -40,6 +40,7 @@ def train_neg_sample(model, train_loader, adj, optim, lossfn, is_parallel):
     if is_parallel:
         # adj = torch.tensor([adj,adj,adj]).cuda()
         adj = adj.expand(torch.cuda.device_count(), *adj.shape).cuda()
+        batch_size = batch_size * torch.cuda.device_count()
     else:
         adj = adj.cuda()
 
@@ -74,6 +75,8 @@ def train_bpr(model, batch_size, train_df, train_pos_neg, optim, lossfn, is_para
     # if isparalell and torch.cuda.device_count()>1:  
     #     lossfn = DataParallelCriterion2(lossfn)
     total_loss = 0.0
+    if is_parallel:
+        batch_size = batch_size * torch.cuda.device_count()
 
     n_batches = len(train_df) // batch_size + 1
     for batch_id in range(n_batches):

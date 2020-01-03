@@ -38,6 +38,12 @@ def loadGowalla(datapath):
     rt = train_df.append(test_df)
     return rt, train_df, test_df
 
+def loadYelp(datapath):
+    train_df = pd.read_table(datapath + '/y_train.csv',sep=',', names=['userId','itemId','rating'], dtype={'userId': np.int64, 'itemId': np.int64})
+    test_df = pd.read_table(datapath + '/y_test.csv',sep=',', names=['userId','itemId','rating'], dtype={'userId': np.int64, 'itemId': np.int64})
+    rt = train_df.append(test_df)
+    return rt, train_df, test_df
+
 def loadAmazon_Gowalla(dataset):
     datapath = path.dirname(__file__) + '/' + dataset
     if dataset == 'Amazon':

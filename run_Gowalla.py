@@ -33,7 +33,7 @@ from graphattention.BPRLoss import BPRLoss
 
 from parallel import DataParallelModel, DataParallelCriterion, DataParallelCriterion2
 from train_eval_Gowalla import eval_neg_sample, eval_neg_all, train_bpr, train_neg_sample
-from data.loadGowalla import load1MRatings, load100KRatings, split_loo, loadGowalla, train_pos_neg_exclude_test, test_positives, test_positives_negtives, positives_negtives, get_adj_mat
+from data.loadGowalla import load1MRatings, load100KRatings, split_loo, loadGowalla, loadYelp, train_pos_neg_exclude_test, test_positives, test_positives_negtives, positives_negtives, get_adj_mat
 
 
 CUDA_LAUNCH_BLOCKING=1
@@ -44,6 +44,12 @@ def prepareData(args):
     if args.dataset == 'Gowalla':
         datapath = path.dirname(__file__) + './data/' + args.dataset
         rt, train_df, test_df = loadGowalla(datapath)
+        userNum = rt['userId'].max() + 1  
+        itemNum = rt['itemId'].max() + 1
+        print('userNum:{}, itemNum:{}'.format(userNum, itemNum))
+    elif args.dataset == 'Yelp':
+        datapath = path.dirname(__file__) + './data/' + args.dataset
+        rt, train_df, test_df = loadYelp(datapath)
         userNum = rt['userId'].max() + 1  
         itemNum = rt['itemId'].max() + 1
         print('userNum:{}, itemNum:{}'.format(userNum, itemNum))
