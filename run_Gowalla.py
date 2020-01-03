@@ -124,9 +124,13 @@ def main(args):
     print('adj.shape', adj.shape)
     model, lossfn, optim = createModels(args, userNum, itemNum)
 
-    
+    if args.resume_from:
+        checkpoint = torch.load('ckpts/{}_{:03d}.pkl'.format(args.model, args.resume_from))
+        model.load_state_dict(checkpoint['model'])
+        optim.load_state_dict(checkpoint['optim'])
+        print("=> loaded checkpoint '{}'".format('ckpts/{}_{:03d}.pkl'.format(args.model, args.resume_from)))
        
-    for epoch in range(args.epochs):
+    for epoch in range(args.resume_from, args.epochs):
         t0 = time.time()
         if args.train_mode == 'PairSampling':
             train_loss = train_bpr(model, args.batch_size, train_df, train_pos_neg, adj, optim, lossfn, args.parallel)
@@ -151,7 +155,7 @@ def main(args):
                 summaryWriter.add_scalar('metrics/HR', HR, epoch)
                 summaryWriter.add_scalar('metrics/NDCG', NDCG, epoch)
             print("The time of evaluate epoch {:03d}".format(epoch) + " is: " + time.strftime("%H: %M: %S", time.gmtime(time.time() - t0)))
-                
+            torch.save({'model': model.state_dict(),'optim': optim.state_dict()}, 'ckpts/{}_{:03d}.pkl'.format(args.model, epoch+1))      
 
 
 if __name__ == "__main__":
@@ -161,6 +165,7 @@ if __name__ == "__main__":
     parser.add_argument("--adj_type", type=str, default="ui_mat", help="which adj matrix to use [ui_mat, plain_adj, norm_adj, mean_adj]")
     parser.add_argument("--epochs", type=int, default=200, help="training epoches")
     parser.add_argument("--eval_every", type=int, default=5, help="evaluate every")
+    parser.add_argument("--resume_from", type=int, default=0, help="resume from epoch")
     parser.add_argument("--lr", type=float, default=0.001, help="learning rate")
     parser.add_argument("--weight_decay", type=float, default=0.00001, help="weight_decay")
     parser.add_argument("--batch_size", type=int, default=2048, help="input batch size for training")
@@ -176,7 +181,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
     if args.parallel:
         print('----------------Parallel Mode is enabled----------------')
-        os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_id 
+        os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_id
+        print('gpu_id', args.gpu_id)
     else:
         print('----------------Parallel Mode is disabled.----------------')
         os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_id  
