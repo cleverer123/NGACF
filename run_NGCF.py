@@ -28,6 +28,7 @@ from graphattention.GACFmodel5 import GACFV5
 from graphattention.GACFmodel6 import GACFV6
 
 from graphattention.GCFmodel import  NGCFMF, NGCFMLP, NGCFMFMLP, NGCFMF_concat_MF, NGCFMF_concat_MLP, NGCFMF_concat_MF_MLP, NGCFMLP_concat_MF, NGCFMLP_concat_MLP, NGCFMLP_concat_MF_MLP
+from graphattention.GCFModified import NGCFMF_M
 from graphattention.GCFmodel import NCF
 from graphattention.NMF import NMF
 
@@ -94,6 +95,8 @@ def prepareData(args):
 def createModels(args, userNum, itemNum, adj):
     if args.model == 'NGCFMF':
         model = NGCFMF(userNum, itemNum, adj, embedSize=args.embedSize, layers=args.layers).cuda()
+    elif args.model == 'NGCFMF_M':
+        model = NGCFMF_M(userNum, itemNum, adj, embedSize=args.embedSize, layers=args.layers).cuda()
 
     if args.train_mode == 'PairSampling':
         lossfn = BPRLoss()
