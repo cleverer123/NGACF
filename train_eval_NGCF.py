@@ -232,7 +232,7 @@ def report_pos_neg(x):
 ########################################## Eval for test data with all negatives #################################################
 def eval_neg_all(model, batch_size, test_df, test_pos_neg, itemNum, is_parallel):
     model.eval()
-    Ks = [10,20]
+    Ks = [1,5,10,20]
     result = {'precision': np.zeros(len(Ks)), 'recall': np.zeros(len(Ks)), 'ndcg': np.zeros(len(Ks)),
               'hit_ratio': np.zeros(len(Ks)), 'auc': 0.}
 
@@ -243,7 +243,8 @@ def eval_neg_all(model, batch_size, test_df, test_pos_neg, itemNum, is_parallel)
     item_batch_size = batch_size
     item_loader = DataLoader(ItemDataSet(np.arange(itemNum)), batch_size=item_batch_size, shuffle=False, pin_memory=False)
     
-    user_batch_size = batch_size // 16
+    # user_batch_size = batch_size // 16
+    user_batch_size = 64
     n_user_batchs = test_user_num // user_batch_size + 1
 
     # 手动加载 test_data. dataframe: ['userId', 'positive_items', 'negative_items']]
@@ -304,7 +305,7 @@ def eval_neg_all(model, batch_size, test_df, test_pos_neg, itemNum, is_parallel)
     return result   
 
 def report_one_user(x):
-    Ks = [10, 20]
+    Ks = [1,5,10,20]
     # user u's ratings for user u, 
     ratings, positive_items, negative_items = x
     

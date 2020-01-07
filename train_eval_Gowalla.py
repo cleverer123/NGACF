@@ -96,6 +96,11 @@ def train_bpr(model, batch_size, train_df, train_pos_neg, adj, optim, lossfn, is
 
     if is_parallel:
         adj = adj.expand(torch.cuda.device_count(), *adj.shape).cuda()
+        # print(adj)
+        # adjs = []
+        # for i in range(torch.cuda.device_count()):
+        #     adjs.append(adj.clone().to(torch.device('cuda', i)))
+        # adj = adjs
         batch_size = batch_size * torch.cuda.device_count()
     else:
         adj = torch.LongTensor(adj).cuda()
@@ -268,7 +273,7 @@ def report_pos_neg(x):
 ########################################## Eval for test data with all negatives #################################################
 def eval_neg_all(model, batch_size, test_df, test_pos_neg, adj, itemNum, is_parallel):
     model.eval()
-    Ks = [10,20]
+    Ks = [1,5,10,20]
     result = {'precision': np.zeros(len(Ks)), 'recall': np.zeros(len(Ks)), 'ndcg': np.zeros(len(Ks)),
               'hit_ratio': np.zeros(len(Ks)), 'auc': 0.}
 
@@ -284,6 +289,10 @@ def eval_neg_all(model, batch_size, test_df, test_pos_neg, adj, itemNum, is_para
 
     if is_parallel:
         adj = adj.expand(torch.cuda.device_count(), *adj.shape).cuda()
+        # adjs = []
+        # for i in range(torch.cuda.device_count()):
+        #     adjs.append(adj.clone().to(torch.device('cuda', i)))
+        # adj = adjs
     else:
         adj = torch.LongTensor(adj).cuda()
     # 手动加载 test_data. dataframe: ['userId', 'positive_items', 'negative_items']]
@@ -344,7 +353,7 @@ def eval_neg_all(model, batch_size, test_df, test_pos_neg, adj, itemNum, is_para
     return result   
 
 def report_one_user(x):
-    Ks = [10, 20]
+    Ks = [1,5,10,20]
     # user u's ratings for user u, 
     ratings, positive_items, negative_items = x
     

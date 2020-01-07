@@ -22,18 +22,20 @@
 
 # single sparse layer and multiple graph propagation layers
 # python run_Mask.py --model SPGAMGP --dataset ml100k --lr 0.002 --weight_decay 0.000001 --parallel False --epochs 200 --droprate 0.2 --adj_type mean_adj --layers [64,64]
-python run_Mask.py --model SPGAMGP --dataset ml1m --lr 0.002 --weight_decay 0.000001 --parallel False --epochs 200 --droprate 0.2 --adj_type mean_adj --layers [64]
+# python run_Mask.py --model SPGAMGP --dataset ml1m --lr 0.002 --weight_decay 0.000001 --parallel False --epochs 200 --droprate 0.2 --adj_type mean_adj --layers [64]
 
 
 # adj add selfloop : Dec23_09-52-48
 # python run_Mask.py --model SPGAMGP --dataset ml100k --lr 0.002 --weight_decay 0.000001 --parallel False --epochs 200 --droprate 0.2 --adj_type mean_adj --layers [64,64]
-python run_Mask.py --model SPGAMGP --dataset ml1m --lr 0.002 --weight_decay 0.000001 --parallel False --epochs 200 --droprate 0.2 --adj_type mean_adj --layers [64,64]
+# python run_Mask.py --model SPGAMGP --dataset ml1m --lr 0.002 --weight_decay 0.000001 --parallel False --epochs 200 --droprate 0.2 --adj_type mean_adj --layers [64,64]
 
 
-python run_Mask.py --model SPUIGACF --dataset ml100k --lr 0.002 --weight_decay 0.000001 --parallel False --epochs 500 --droprate 0.2 --adj_type mean_adj --layers [64,64]
+# python run_Mask.py --model SPUIGACF --dataset ml100k --lr 0.002 --weight_decay 0.000001 --parallel False --epochs 500 --droprate 0.2 --adj_type mean_adj --layers [64,64]
 
-python run_Gowalla.py --model SPUIGACF --dataset ml100k --lr 0.002 --weight_decay 0.000001 --parallel False --epochs 500 --droprate 0.2 --adj_type ui_mat --layers [64,64]
+# python run_Gowalla.py --model SPUIGACF --dataset ml100k --lr 0.002 --weight_decay 0.000001 --parallel True --gpu_id 0,1 --epochs 100 --droprate 0.2 --adj_type ui_mat --train_mode PairSampling --eval_mode AllNeg 
 
-python run_NGCF.py --model NGCFMF --dataset ml100k --lr 0.002 --weight_decay 0.000001 --parallel False --epochs 500 --droprate 0.2 --adj_type mean_adj --train_mode PairSampling --eval_mode AllNeg 
+# python run_NGCF.py --model NGCFMF --dataset ml100k --lr 0.002 --weight_decay 0.000001 --parallel False --epochs 500 --droprate 0.2 --adj_type mean_adj --train_mode PairSampling --eval_mode AllNeg 
 
-python run_NGCF.py --model NGCFMF --dataset ml1m --lr 0.002 --weight_decay 0.000001 --parallel False --gpu_id 2 --epochs 500 --droprate 0.2 --adj_type mean_adj --train_mode PairSampling --eval_mode AllNeg 
+# python run_NGCF.py --model NGCFMF --dataset ml1m --lr 0.002 --weight_decay 0.000001 --parallel False --gpu_id 2 --epochs 500 --droprate 0.2 --adj_type mean_adj --train_mode PairSampling --eval_mode AllNeg 
+
+# python run_Gowalla.py --model SPUIGACF --dataset Gowalla --lr 0.002 --weight_decay 0.000001 --parallel True --gpu_id 1,2,3 --epochs 200 --droprate 0.2 --adj_type ui_mat --train_mode PairSampling --eval_mode AllNeg --eval_every 10

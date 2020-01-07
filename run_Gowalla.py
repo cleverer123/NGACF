@@ -125,7 +125,7 @@ def main(args):
     model, lossfn, optim = createModels(args, userNum, itemNum)
 
     if args.resume_from:
-        checkpoint = torch.load('ckpts/{}_{:03d}.pkl'.format(args.model, args.resume_from))
+        checkpoint = torch.load('ckpts/{}_{}_{:03d}.pkl'.format(args.model, args.dataset, args.resume_from))
         model.load_state_dict(checkpoint['model'])
         optim.load_state_dict(checkpoint['optim'])
         print("=> loaded checkpoint '{}'".format('ckpts/{}_{:03d}.pkl'.format(args.model, args.resume_from)))
@@ -138,6 +138,9 @@ def main(args):
             train_loss = train_neg_sample(model, args.batch_size, train_df, train_pos_neg, adj, optim, lossfn, args.parallel)
         summaryWriter.add_scalar('loss/train_loss', train_loss, epoch)
         print('------epoch:{}, train_loss:{:5f}, time consuming:{}s'.format(epoch, train_loss, time.strftime("%H: %M: %S", time.gmtime(time.time() - t0))))
+        
+        if (epoch+1) % args.save_every == 0 :
+            torch.save({'model': model.state_dict(),'optim': optim.state_dict()}, 'ckpts/{}_{}_{:03d}.pkl'.format(args.model, args.dataset, epoch+1))
         if (epoch+1) % args.eval_every == 0 :
             t0 = time.time()
             if args.eval_mode == 'AllNeg':
@@ -155,16 +158,15 @@ def main(args):
                 summaryWriter.add_scalar('metrics/HR', HR, epoch)
                 summaryWriter.add_scalar('metrics/NDCG', NDCG, epoch)
             print("The time of evaluate epoch {:03d}".format(epoch) + " is: " + time.strftime("%H: %M: %S", time.gmtime(time.time() - t0)))
-            torch.save({'model': model.state_dict(),'optim': optim.state_dict()}, 'ckpts/{}_{:03d}.pkl'.format(args.model, epoch+1))      
-
-
+            
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Neural Graph Attention Collaborative Filtering')
     parser.add_argument("--dataset", type=str, default="ml100k", help="which dataset to use[ml100k/ml1m/Amazon])")  
     parser.add_argument("--model", type=str, default="SPUIGACF", help="which model to use(SPUIGACF, SPUIMultiGACF, SPUIGAGPCF)")
     parser.add_argument("--adj_type", type=str, default="ui_mat", help="which adj matrix to use [ui_mat, plain_adj, norm_adj, mean_adj]")
     parser.add_argument("--epochs", type=int, default=200, help="training epoches")
-    parser.add_argument("--eval_every", type=int, default=5, help="evaluate every")
+    parser.add_argument("--eval_every", type=int, default=10, help="evaluate every")
+    parser.add_argument("--save_every", type=int, default=10, help="save every")
     parser.add_argument("--resume_from", type=int, default=0, help="resume from epoch")
     parser.add_argument("--lr", type=float, default=0.001, help="learning rate")
     parser.add_argument("--weight_decay", type=float, default=0.00001, help="weight_decay")
