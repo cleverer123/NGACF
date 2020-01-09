@@ -164,6 +164,7 @@ if __name__ == "__main__":
     parser.add_argument("--adj_type", type=str, default="ui_mat", help="which adj matrix to use [ui_mat, plain_adj, norm_adj, mean_adj]")
     parser.add_argument("--epochs", type=int, default=200, help="training epoches")
     parser.add_argument("--eval_every", type=int, default=5, help="evaluate every")
+    parser.add_argument("--save_every", type=int, default=10, help="save every")
     parser.add_argument("--resume_from", type=int, default=0, help="resume from epoch")
     parser.add_argument("--lr", type=float, default=0.001, help="learning rate")
     parser.add_argument("--weight_decay", type=float, default=0.00001, help="weight_decay")
