@@ -121,7 +121,7 @@ def main(args):
     model, lossfn, optim = createModels(args, userNum, itemNum, adj)
     
     if args.resume_from:
-        checkpoint = torch.load('ckpts/{}_{}_{:03d}.pkl'.format(args.model, args.dataset, args.resume_from))
+        checkpoint = torch.load('ckpts/{}_{}_lr:{}_{:03d}.pkl'.format(args.model, args.dataset, args.lr, args.resume_from))
         model.load_state_dict(checkpoint['model'])
         optim.load_state_dict(checkpoint['optim'])
         print("=> loaded checkpoint '{}'".format('ckpts/{}_{:03d}.pkl'.format(args.model, args.resume_from)))
@@ -135,7 +135,7 @@ def main(args):
         summaryWriter.add_scalar('loss/train_loss', train_loss, epoch)
         print('------epoch:{}, train_loss:{:5f}, time consuming:{}s'.format(epoch, train_loss, time.strftime("%H: %M: %S", time.gmtime(time.time() - t0))))
         if (epoch+1) % args.save_every == 0 :
-            torch.save({'model': model.state_dict(),'optim': optim.state_dict()}, 'ckpts/{}_{}_{:03d}.pkl'.format(args.model, args.dataset, epoch+1))
+            torch.save({'model': model.state_dict(),'optim': optim.state_dict()}, 'ckpts/{}_{}_lr:{}_{:03d}.pkl'.format(args.model, args.dataset, args.lr, epoch+1))
         if (epoch+1) % args.eval_every == 0 :      
 
             t0 = time.time()
