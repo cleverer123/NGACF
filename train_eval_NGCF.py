@@ -236,7 +236,7 @@ def eval_neg_all(model, batch_size, test_df, test_pos_neg, itemNum, is_parallel)
     result = {'precision': np.zeros(len(Ks)), 'recall': np.zeros(len(Ks)), 'ndcg': np.zeros(len(Ks)),
               'hit_ratio': np.zeros(len(Ks)), 'auc': 0.}
 
-    cores = multiprocessing.cpu_count() // 2
+    cores = multiprocessing.cpu_count() // 4
     # print('multiprocessing.cpu_count()', cores)
     pool = multiprocessing.Pool(cores)
     test_user_num = len(test_pos_neg)
