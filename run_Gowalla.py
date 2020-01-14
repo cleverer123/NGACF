@@ -146,7 +146,7 @@ def main(args):
             if args.eval_mode == 'AllNeg':
                 metrics = eval_neg_all(model, args.batch_size, test_df, test_pos_neg, adj, itemNum, args.parallel)
                 print('epoch:{} metrics:{}'.format(epoch, metrics))
-                for i, K in enumerate([10,20]):
+                for i, K in enumerate([1,5,10,20]):
                     summaryWriter.add_scalar('metrics@{}/precision'.format(K), metrics['precision'][i], epoch)
                     summaryWriter.add_scalar('metrics@{}/recall'.format(K), metrics['recall'][i], epoch)
                     summaryWriter.add_scalar('metrics@{}/ndcg'.format(K), metrics['ndcg'][i], epoch)

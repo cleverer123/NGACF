@@ -9,19 +9,21 @@ Implemention of 'Neural Graph Attention Collaborative Filtering'
 
 ```pip install -r requirements.txt```
 
-# 小数据集测试
+## 实验
+###  小数据集测试代码是否通过
 
 ```python run_Gowalla.py --parallel False --gpu_id 0 --model SPUIGACF --dataset ml100k --lr 0.002 --weight_decay 0.000001 --epochs 2 --droprate 0.2 --adj_type ui_mat --train_mode PairSampling --eval_mode AllNeg --eval_every 1```
 
-## 实验
+### 实验1：Yelp 实验
 
-目前并行的实现是从GPU0分发数据到各个GPU，SPUIGACF模型中 Gowalla adj 会占用 4G * ，
+内存占用约100G，显存占用12G。
 
-### Gowalla 实验
+```python run_Gowalla.py --parallel False --gpu_id 0 --model SPUIGACF --dataset Yelp --lr 0.01 --weight_decay 0.000001 --epochs 100 --droprate 0.2 --adj_type ui_mat --train_mode PairSampling --eval_mode AllNeg --eval_every 10```
 
-```python run_Gowalla.py --parallel False --gpu_id 0 --model SPUIGACF --dataset Gowalla --lr 0.002 --weight_decay 0.000001 --epochs 100 --droprate 0.2 --adj_type ui_mat --train_mode PairSampling --eval_mode AllNeg --eval_every 10```
+### 实验2：Gowalla 实验
 
-### Yelp 实验
+内存占用约60G，显存占用9G。
+```python run_Gowalla.py --parallel False --gpu_id 0 --model SPUIGACF --dataset Gowalla --lr 0.01 --weight_decay 0.000001 --epochs 100 --droprate 0.2 --adj_type ui_mat --train_mode PairSampling --eval_mode AllNeg --eval_every 10```
 
-```python run_Gowalla.py --parallel False --gpu_id 0 --model SPUIGACF --dataset Yelp --lr 0.002 --weight_decay 0.000001 --epochs 100 --droprate 0.2 --adj_type ui_mat --train_mode PairSampling --eval_mode AllNeg --eval_every 10```
+
 
