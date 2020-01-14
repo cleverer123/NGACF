@@ -23,6 +23,7 @@ Implemention of 'Neural Graph Attention Collaborative Filtering'
 ### 实验2：Gowalla 实验
 
 内存占用约60G，显存占用9G。
+
 ```python run_Gowalla.py --parallel False --gpu_id 0 --model SPUIGACF --dataset Gowalla --lr 0.01 --weight_decay 0.000001 --epochs 100 --droprate 0.2 --adj_type ui_mat --train_mode PairSampling --eval_mode AllNeg --eval_every 50```
 
 
